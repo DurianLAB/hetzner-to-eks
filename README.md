@@ -267,7 +267,6 @@ flowchart TB
         GITHUB --> ECR
         ECR --> ARGOCD
         ARGOCD --> EKS
-        TERRAFORM --> STAGE3
         GUARD --> SEC_HUB
         SEC_HUB --> PAGER
     end

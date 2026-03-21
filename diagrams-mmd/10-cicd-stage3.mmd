@@ -1,0 +1,41 @@
+sequenceDiagram
+    autonumber
+    participant DEV as Developer
+    participant GH as GitHub Actions
+    participant SONAR as SonarCloud
+    participant TRIVY as Trivy
+    participant ECR as Amazon ECR
+    participant SM as Secrets Manager
+    participant TERRAFORM as Terraform Cloud
+    participant EKS as AWS EKS
+    participant ARGOCD as ArgoCD GitOps
+    participant CW as CloudWatch
+
+    DEV->>GH: git push main
+    GH->>GH: Unit tests
+    GH->>SONAR: Static code analysis
+    GH->>TRIVY: Container image scan
+    TRIVY-->>GH: No critical CVEs
+
+    par Container Build Push
+        GH->>ECR: docker build push api:v4.0.0
+        GH->>SM: Fetch secrets via OIDC role
+    end
+
+    par Infrastructure as Code
+        GH->>TERRAFORM: terraform plan
+        TERRAFORM-->>GH: Plan approved
+        GH->>TERRAFORM: terraform apply
+        TERRAFORM->>EKS: Update EKS add-ons
+    end
+
+    par GitOps Sync
+        ARGOCD->>ECR: Pull new image tag
+        ARGOCD->>EKS: kubectl apply auto-sync
+        ARGOCD-->>DEV: GitOps sync complete
+    end
+
+    EKS->>CW: Emit metrics and logs
+    CW->>DEV: Slack alert deployed
+
+    Note over GH,DEV: Full audit trail via CloudTrail

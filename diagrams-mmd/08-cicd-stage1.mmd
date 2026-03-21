@@ -1,0 +1,22 @@
+sequenceDiagram
+    autonumber
+    participant DEV as Developer
+    participant GH as GitHub
+    participant REG as Docker Hub GHCR
+    participant RUNNER as GitHub Actions
+    participant K8S as K3s/Talos Hetzner
+    participant APPS as Applications
+
+    DEV->>GH: git push feature-branch
+    DEV->>GH: Merge to main
+    GH->>RUNNER: Trigger workflow
+
+    RUNNER->>RUNNER: Run tests
+    RUNNER->>RUNNER: lint + security scan
+    RUNNER->>REG: docker build + push
+
+    RUNNER->>K8S: kubectl set image deployment/api
+    RUNNER->>K8S: helm upgrade api chart
+
+    K8S->>APPS: Rolling update pods
+    K8S-->>DEV: Deploy notification

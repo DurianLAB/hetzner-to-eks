@@ -1,0 +1,27 @@
+sequenceDiagram
+    autonumber
+    participant DEV as Developer
+    participant GH as GitHub Actions
+    participant ECR as Amazon ECR
+    participant GHCR as GH Container Registry
+    participant EKS as AWS EKS US Regulated
+    participant HETZNER as K3s/Talos Hetzner EU
+    participant SM as Secrets Manager AWS
+
+    DEV->>GH: git push main
+    GH->>GH: Run tests and security scans
+
+    par US workloads to EKS
+        GH->>ECR: docker build push api-us:v3.0.0
+        GH->>SM: Fetch DB credentials
+        GH->>EKS: kubectl apply us-production
+        EKS->>EKS: Rolling update US services
+        EKS-->>DEV: US workload deployed
+    and EU workloads to Hetzner
+        GH->>GHCR: docker build push api-eu:v3.0.0
+        GH->>HETZNER: kubectl set image api-eu
+        HETZNER->>HETZNER: Rolling update EU services
+        HETZNER-->>DEV: EU workload deployed
+    end
+
+    Note over SM,HETZNER: External Secrets Operator pulls from AWS SM

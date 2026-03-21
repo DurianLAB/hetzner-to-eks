@@ -1,0 +1,696 @@
+\section{Startup Migration: Hetzner to AWS
+EKS}\label{startup-migration-hetzner-to-aws-eks}
+
+A decision framework and architecture documentation for startups
+evaluating infrastructure migration from Hetzner Cloud to AWS EKS.
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{Overview}\label{overview}
+
+This guide documents the typical journey of a startup migrating from
+\textbf{Hetzner Cloud} (self-managed Kubernetes) to \textbf{AWS EKS}
+(managed Kubernetes).
+
+\subsubsection{3-Stage Progression}\label{stage-progression}
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2000}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Stage
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Platform
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Monthly Spend
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Team Size
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Use Case
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\textbf{Stage 1} & Hetzner Only & €20--100 & 1--5 & MVP, EU-focused,
+Bootstrap \\
+\textbf{Stage 2} & Hetzner + AWS Hybrid & €100--500 + \$500--2K & 5--15
+& US + EU mixed customers \\
+\textbf{Stage 3} & Full AWS EKS & \$2K--20K & 15+ & US enterprise,
+Series B+ \\
+\end{longtable}
+}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{Migration Journey}\label{migration-journey}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{flowchart TD}
+\NormalTok{    START([Startup Founded]) {-}{-}\textgreater{} FUNDING}
+\NormalTok{    FUNDING\{Funding Stage?\}}
+\NormalTok{    FUNDING {-}{-}\textgreater{}|Bootstrapped| EVAL}
+\NormalTok{    FUNDING {-}{-}\textgreater{}|Seed / Series A| EVAL}
+
+\NormalTok{    EVAL\{Hetzner sufficient?\}}
+\NormalTok{    EVAL {-}{-}\textgreater{}|Yes| DEPLOY}
+\NormalTok{    EVAL {-}{-}\textgreater{}|No| ESCALATE}
+
+\NormalTok{    DEPLOY["Deploy on Hetzner Cloud"] {-}{-}\textgreater{} K8S}
+\NormalTok{    K8S["Self{-}managed K8s (RKE2 / Talos / K3s)"] {-}{-}\textgreater{} GROW}
+\NormalTok{    GROW["Iterate \& Grow on Hetzner"] {-}{-}\textgreater{} TRIGGERS}
+
+\NormalTok{    TRIGGERS\{Migration triggers?\}}
+\NormalTok{    TRIGGERS {-}{-}\textgreater{}|US Enterprise Deals| ESCALATE}
+\NormalTok{    TRIGGERS {-}{-}\textgreater{}|SOC 2 Required| ESCALATE}
+\NormalTok{    TRIGGERS {-}{-}\textgreater{}|HIPAA / PCI DSS| ESCALATE}
+\NormalTok{    TRIGGERS {-}{-}\textgreater{}|$5K+/mo spend| ESCALATE}
+\NormalTok{    TRIGGERS {-}{-}\textgreater{}|Multi{-}region SLA needed| ESCALATE}
+\NormalTok{    TRIGGERS {-}{-}\textgreater{}|No triggers| STAY["Stay on Hetzner"]}
+
+\NormalTok{    ESCALATE["Identify EKS{-}ready workloads"] {-}{-}\textgreater{} SEGREGATE}
+\NormalTok{    SEGREGATE["Segregate workloads"] {-}{-}\textgreater{} WHICH\{Which to migrate first?\}}
+\NormalTok{    WHICH {-}{-}\textgreater{}|Customer{-}facing APIs| P1["1. Customer{-}facing services"]}
+\NormalTok{    WHICH {-}{-}\textgreater{}|US customer workloads| P2["2. Regulated workloads"]}
+\NormalTok{    WHICH {-}{-}\textgreater{}|Critical path services| P3["3. High{-}availability services"]}
+
+\NormalTok{    P1 {-}{-}\textgreater{} SETUP["Provision EKS Cluster"]}
+\NormalTok{    P2 {-}{-}\textgreater{} SETUP}
+\NormalTok{    P3 {-}{-}\textgreater{} SETUP}
+\NormalTok{    SETUP {-}{-}\textgreater{} CI["Setup CI/CD to EKS"]}
+\NormalTok{    CI {-}{-}\textgreater{} FIRST["Migrate first workload"]}
+\NormalTok{    FIRST {-}{-}\textgreater{} VERIFY["Verify in production"]}
+\NormalTok{    VERIFY {-}{-}\textgreater{} STABLE\{Is it stable?\}}
+\NormalTok{    STABLE {-}{-}\textgreater{}|Yes| KEEP["Keep Hetzner for dev/staging and EU{-}only services"]}
+\NormalTok{    STABLE {-}{-}\textgreater{}|No| ROLLBACK["Rollback to Hetzner"]}
+\NormalTok{    ROLLBACK {-}{-}\textgreater{} FIX(["Fix issues and retry"])}
+\NormalTok{    FIX {-}{-}\textgreater{} FIRST}
+\NormalTok{    KEEP {-}{-}\textgreater{} ITERATE["Iterate: migrate next workload"]}
+\NormalTok{    ITERATE {-}{-}\textgreater{} MORE\{More workloads?\}}
+\NormalTok{    MORE {-}{-}\textgreater{}|Yes| WHICH}
+\NormalTok{    MORE {-}{-}\textgreater{}|No| HYBRID["Stable Hybrid State"]}
+
+\NormalTok{    HYBRID {-}{-}\textgreater{} FUTURE\{Long{-}term strategy?\}}
+\NormalTok{    FUTURE {-}{-}\textgreater{}|US Enterprise Primary| FULL["Migrate remaining to EKS"]}
+\NormalTok{    FUTURE {-}{-}\textgreater{}|Cost Optimization| MULTI["Hetzner + EKS + Spot"]}
+\NormalTok{    FUTURE {-}{-}\textgreater{}|EU Sovereignty| EU["Scale Hetzner + use EKS{-}EU"]}
+
+\NormalTok{    FULL {-}{-}\textgreater{} FINAL1["Full AWS EKS Platform"]}
+\NormalTok{    MULTI {-}{-}\textgreater{} FINAL2["Multi{-}Cloud Strategy"]}
+\NormalTok{    EU {-}{-}\textgreater{} FINAL3["EU{-}First with AWS EKS{-}EU"]}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{Architecture Diagrams}\label{architecture-diagrams}
+
+\subsubsection{Stage 1 --- Hetzner Only}\label{stage-1-hetzner-only}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{flowchart TB}
+\NormalTok{    subgraph STAGE1["STAGE 1: Hetzner Only"]}
+\NormalTok{        USERS1["Users / Clients"] {-}{-}\textgreater{} DDOS1}
+\NormalTok{        DDOS1["DDoS Protection (Cloudflare)"] {-}{-}\textgreater{} LB1}
+\NormalTok{        LB1["Load Balancer (Cloudflare)"] {-}{-}\textgreater{} FW1}
+\NormalTok{        FW1["Firewall Rules"] {-}{-}\textgreater{} ING1}
+
+\NormalTok{        ING1["Ingress Controller (nginx / Traefik)"] {-}{-}\textgreater{} API1}
+\NormalTok{        ING1 {-}{-}\textgreater{} WEB1["Web App"]}
+
+\NormalTok{        API1["API Service"] {-}{-}\textgreater{} WORKER1["Background Workers"]}
+\NormalTok{        API1 {-}{-}\textgreater{} DB1["PostgreSQL (Self{-}managed)"]}
+\NormalTok{        API1 {-}{-}\textgreater{} CACHE1["Redis (Self{-}managed)"]}
+\NormalTok{        API1 {-}{-}\textgreater{} OBJ1["Object Storage (Hetzner)"]}
+
+\NormalTok{        subgraph K8S["Kubernetes Cluster (Self{-}Managed)"]}
+\NormalTok{            subgraph NS1["Namespace: production"]}
+\NormalTok{                ING1}
+\NormalTok{                API1}
+\NormalTok{                WEB1}
+\NormalTok{                WORKER1}
+\NormalTok{                DB1}
+\NormalTok{                CACHE1}
+\NormalTok{                OBJ1}
+\NormalTok{            end}
+\NormalTok{            subgraph NS2["Namespace: staging"]}
+\NormalTok{                ING1B["Ingress"]}
+\NormalTok{                API1B["API Service"]}
+\NormalTok{                WEB1B["Web App"]}
+\NormalTok{            end}
+\NormalTok{        end}
+
+\NormalTok{        CI1["CI/CD Runner (GitHub Actions)"] {-}{-}\textgreater{} ING1}
+\NormalTok{        MON1["Monitoring (Grafana + Prometheus)"]}
+\NormalTok{        LOGS1["Logging (Loki)"]}
+\NormalTok{    end}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{Stage 2 --- Hybrid (Hetzner +
+EKS)}\label{stage-2-hybrid-hetzner-eks}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{flowchart TB}
+\NormalTok{    subgraph STAGE2["STAGE 2: Hybrid Architecture"]}
+
+\NormalTok{        subgraph INTERNET["Internet"]}
+\NormalTok{            US["Users / Clients"]}
+\NormalTok{            US\_US["US Enterprise Users"]}
+\NormalTok{            EU\_US["EU Users"]}
+\NormalTok{        end}
+
+\NormalTok{        US {-}{-}\textgreater{} CF["Cloudflare"]}
+\NormalTok{        US\_US {-}{-}\textgreater{} CF\_US["Cloudflare US"]}
+\NormalTok{        EU\_US {-}{-}\textgreater{} CF\_EU["Cloudflare EU"]}
+
+\NormalTok{        subgraph HETZNER["Hetzner Cloud (EU{-}Only / Non{-}Critical)"]}
+\NormalTok{            CF\_EU {-}{-}\textgreater{} H\_LB["Hetzner Load Balancer"]}
+\NormalTok{            H\_LB {-}{-}\textgreater{} H\_FW["Firewall"]}
+\NormalTok{            H\_FW {-}{-}\textgreater{} H\_API["EU{-}Only API Service"]}
+\NormalTok{            H\_API {-}{-}\textgreater{} H\_DB["PostgreSQL (EU data residency)"]}
+\NormalTok{            H\_API {-}{-}\textgreater{} H\_CACHE["Redis (EU)"]}
+\NormalTok{            H\_API {-}{-}\textgreater{} H\_OBJ["Hetzner Object Storage"]}
+
+\NormalTok{            subgraph H\_K8S["K3s / Talos Cluster"]}
+\NormalTok{                subgraph H\_NS1["Namespace: dev{-}staging"]}
+\NormalTok{                    H\_WEB\_DEV["Web App (dev)"]}
+\NormalTok{                    H\_API\_DEV["API (dev)"]}
+\NormalTok{                end}
+\NormalTok{                subgraph H\_NS2["Namespace: eu{-}services"]}
+\NormalTok{                    H\_API}
+\NormalTok{                    H\_DB}
+\NormalTok{                    H\_CACHE}
+\NormalTok{                end}
+\NormalTok{            end}
+\NormalTok{        end}
+
+\NormalTok{        subgraph AWS["AWS (US / Regulated / Critical)"]}
+\NormalTok{            CF\_US {-}{-}\textgreater{} AWS\_ING["AWS Load Balancer Controller"]}
+\NormalTok{            AWS\_ING {-}{-}\textgreater{} AWS\_API["API Service"]}
+\NormalTok{            AWS\_ING {-}{-}\textgreater{} AWS\_WEB["Web Service"]}
+\NormalTok{            AWS\_API {-}{-}\textgreater{} AWS\_WORKER["Workers (SQS{-}triggered)"]}
+\NormalTok{            AWS\_API {-}{-}\textgreater{} AWS\_RDS["RDS PostgreSQL (Multi{-}AZ)"]}
+\NormalTok{            AWS\_API {-}{-}\textgreater{} AWS\_ELASTI["ElastiCache Redis"]}
+\NormalTok{            AWS\_API {-}{-}\textgreater{} AWS\_S3["S3 Buckets"]}
+\NormalTok{            AWS\_WORKER {-}{-}\textgreater{} AWS\_SQS["SQS Queues"]}
+\NormalTok{            AWS\_API {-}{-}\textgreater{} AWS\_SECRETS["Secrets Manager"]}
+
+\NormalTok{            subgraph AWS\_EKS["EKS Cluster"]}
+\NormalTok{                subgraph AWS\_NS1["Namespace: us{-}production"]}
+\NormalTok{                    AWS\_ING}
+\NormalTok{                    AWS\_API}
+\NormalTok{                    AWS\_WEB}
+\NormalTok{                    AWS\_WORKER}
+\NormalTok{                end}
+\NormalTok{                subgraph AWS\_NS2["Namespace: regulated"]}
+\NormalTok{                    AWS\_COMP["Compliance Workloads"]}
+\NormalTok{                end}
+\NormalTok{            end}
+\NormalTok{        end}
+
+\NormalTok{        H\_API {-}.{-}\textgreater{} AWS\_API}
+\NormalTok{        GH["GitHub Actions"] {-}{-}\textgreater{} AWS\_EKS}
+\NormalTok{        GH {-}{-}\textgreater{} H\_K8S}
+\NormalTok{    end}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{Stage 3 --- Full AWS EKS}\label{stage-3-full-aws-eks}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{flowchart TB}
+\NormalTok{    subgraph STAGE3["STAGE 3: Full AWS EKS"]}
+
+\NormalTok{        subgraph PUBLIC["Internet"]}
+\NormalTok{            USERS["Users"]}
+\NormalTok{            PARTNERS["Partners / APIs"]}
+\NormalTok{            CDN["CloudFront CDN"]}
+\NormalTok{        end}
+
+\NormalTok{        USERS {-}{-}\textgreater{} CDN}
+\NormalTok{        PARTNERS {-}{-}\textgreater{} CDN}
+\NormalTok{        CDN {-}{-}\textgreater{} WAF["AWS WAF (DDoS + Rate Limiting)"]}
+\NormalTok{        WAF {-}{-}\textgreater{} ALB["Application Load Balancer"]}
+\NormalTok{        ALB {-}{-}\textgreater{} PROD\_INGRESS["Ingress (AWS LB Controller)"]}
+\NormalTok{        PROD\_INGRESS {-}{-}\textgreater{} PROD\_WEB["Web App"]}
+\NormalTok{        PROD\_INGRESS {-}{-}\textgreater{} PROD\_API["API Service"]}
+\NormalTok{        PROD\_INGRESS {-}{-}\textgreater{} PROD\_WORKER["Async Workers"]}
+\NormalTok{        PROD\_API {-}{-}\textgreater{} PROD\_INFERENCE["Inference Endpoints"]}
+\NormalTok{        PROD\_API {-}{-}\textgreater{} RDS["RDS PostgreSQL (Multi{-}AZ)"]}
+\NormalTok{        PROD\_API {-}{-}\textgreater{} ELASTI["ElastiCache Redis"]}
+\NormalTok{        PROD\_API {-}{-}\textgreater{} S3\_WEB["S3 {-} Static Assets"]}
+\NormalTok{        PROD\_API {-}{-}\textgreater{} SQS["SQS Queues"]}
+\NormalTok{        PROD\_API {-}{-}\textgreater{} SECRETS["Secrets Manager"]}
+\NormalTok{        PROD\_WORKER {-}{-}\textgreater{} SQS}
+\NormalTok{        PROD\_WORKER {-}{-}\textgreater{} RDS}
+
+\NormalTok{        subgraph EKS["EKS Cluster"]}
+\NormalTok{            subgraph NS\_PROD["namespace: production"]}
+\NormalTok{                PROD\_INGRESS}
+\NormalTok{                PROD\_WEB}
+\NormalTok{                PROD\_API}
+\NormalTok{                PROD\_WORKER}
+\NormalTok{                PROD\_INFERENCE}
+\NormalTok{            end}
+\NormalTok{            subgraph NS\_STAGING["namespace: staging"]}
+\NormalTok{                STAGING\_WEB["Web App"]}
+\NormalTok{                STAGING\_API["API"]}
+\NormalTok{            end}
+\NormalTok{            subgraph NS\_MGMT["namespace: management"]}
+\NormalTok{                GRAFANA["Prometheus + Grafana"]}
+\NormalTok{                ARGOCD["ArgoCD / Flux CD"]}
+\NormalTok{                ESO["External Secrets Operator"]}
+\NormalTok{            end}
+\NormalTok{        end}
+
+\NormalTok{        subgraph DATA["Data Services (AWS Managed)"]}
+\NormalTok{            RDS}
+\NormalTok{            ELASTI}
+\NormalTok{            S3\_WEB}
+\NormalTok{            S3\_BACKUP["S3 {-} DB Backups"]}
+\NormalTok{            EFS["EFS {-} Shared FS"]}
+\NormalTok{            SQS}
+\NormalTok{            SNS["SNS Pub/Sub"]}
+\NormalTok{            EVENT["EventBridge"]}
+\NormalTok{            AURORA["Aurora Serverless"]}
+\NormalTok{        end}
+
+\NormalTok{        subgraph SEC["Security Services"]}
+\NormalTok{            SECRETS}
+\NormalTok{            KMS["KMS (Encryption)"]}
+\NormalTok{            IAM["IAM Roles / IRSA"]}
+\NormalTok{            GUARD["GuardDuty"]}
+\NormalTok{            SEC\_HUB["Security Hub"]}
+\NormalTok{            CTRAIL["CloudTrail"]}
+\NormalTok{        end}
+
+\NormalTok{        subgraph CI["CI/CD \& DevOps"]}
+\NormalTok{            GITHUB["GitHub Actions"]}
+\NormalTok{            ECR["ECR Registry"]}
+\NormalTok{            ARGOCD}
+\NormalTok{            TERRAFORM["Terraform IaC"]}
+\NormalTok{            PAGER["PagerDuty"]}
+\NormalTok{        end}
+
+\NormalTok{        GITHUB {-}{-}\textgreater{} ECR}
+\NormalTok{        ECR {-}{-}\textgreater{} ARGOCD}
+\NormalTok{        ARGOCD {-}{-}\textgreater{} EKS}
+\NormalTok{        TERRAFORM {-}{-}\textgreater{} STAGE3}
+\NormalTok{        GUARD {-}{-}\textgreater{} SEC\_HUB}
+\NormalTok{        SEC\_HUB {-}{-}\textgreater{} PAGER}
+\NormalTok{    end}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{Migration Trigger Decision
+Flowchart}\label{migration-trigger-decision-flowchart}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{flowchart TD}
+\NormalTok{    START(["Migration Trigger Assessment"]) {-}{-}\textgreater{} Q1}
+
+\NormalTok{    subgraph COMPLIANCE["Compliance Triggers"]}
+\NormalTok{        Q1\{US enterprise customers require SOC 2?\}}
+\NormalTok{        Q1 {-}{-}\textgreater{}|Yes| C1["SOC 2 Required {-} migrate to EKS"]}
+\NormalTok{        Q1 {-}{-}\textgreater{}|No| Q2}
+
+\NormalTok{        Q2\{Process payment card data?\}}
+\NormalTok{        Q2 {-}{-}\textgreater{}|Yes| C2["PCI DSS Required {-} AWS is Level 1 SP"]}
+\NormalTok{        Q2 {-}{-}\textgreater{}|No| Q3}
+
+\NormalTok{        Q3\{Handle PHI or healthcare data?\}}
+\NormalTok{        Q3 {-}{-}\textgreater{}|Yes| C3["HIPAA Required {-} migrate with BAA"]}
+\NormalTok{        Q3 {-}{-}\textgreater{}|No| Q4}
+
+\NormalTok{        Q4\{EU regulations require BSI C5 or KRITIS?\}}
+\NormalTok{        Q4 {-}{-}\textgreater{}|Yes| C4["Hetzner qualifies (BSI C5)"]}
+\NormalTok{        Q4 {-}{-}\textgreater{}|No| Q5}
+\NormalTok{    end}
+
+\NormalTok{    subgraph COST["Cost Triggers"]}
+\NormalTok{        Q5\{Monthly infra spend over $5000?\}}
+\NormalTok{        Q5 {-}{-}\textgreater{}|Yes| C5["Analyze Reserved / Savings Plans"]}
+\NormalTok{        Q5 {-}{-}\textgreater{}|No| Q6}
+
+\NormalTok{        Q6\{Need managed services like RDS?\}}
+\NormalTok{        Q6 {-}{-}\textgreater{}|Yes| C6["Hetzner lacks managed services"]}
+\NormalTok{        Q6 {-}{-}\textgreater{}|No| Q7}
+\NormalTok{    end}
+
+\NormalTok{    subgraph SCALE["Scale \& Reliability Triggers"]}
+\NormalTok{        Q7\{Need multi{-}region HA with under 1hr RTO?\}}
+\NormalTok{        Q7 {-}{-}\textgreater{}|Yes| C7["Hetzner has no formal SLA"]}
+\NormalTok{        Q7 {-}{-}\textgreater{}|No| Q8}
+
+\NormalTok{        Q8\{Experiencing Hetzner outage impact?\}}
+\NormalTok{        Q8 {-}{-}\textgreater{}|Yes| C8["No redundancy on Hetzner"]}
+\NormalTok{        Q8 {-}{-}\textgreater{}|No| Q9}
+
+\NormalTok{        Q9\{Need under 10ms latency globally?\}}
+\NormalTok{        Q9 {-}{-}\textgreater{}|Yes| C9["Hetzner limited regions"]}
+\NormalTok{        Q9 {-}{-}\textgreater{}|No| Q10}
+\NormalTok{    end}
+
+\NormalTok{    subgraph SECURITY["Security Triggers"]}
+\NormalTok{        Q10\{Need customer{-}facing pentest reports?\}}
+\NormalTok{        Q10 {-}{-}\textgreater{}|Yes| C10["AWS Artifact provides audit reports"]}
+\NormalTok{        Q10 {-}{-}\textgreater{}|No| Q11}
+
+\NormalTok{        Q11\{Team lacks Kubernetes ops expertise?\}}
+\NormalTok{        Q11 {-}{-}\textgreater{}|Yes| C11["Self{-}managed K8s risk"]}
+\NormalTok{        Q11 {-}{-}\textgreater{}|No| Q12}
+\NormalTok{    end}
+
+\NormalTok{    subgraph DECISION["Decision Matrix"]}
+\NormalTok{        Q12\{None of the above?\}}
+\NormalTok{        Q12 {-}{-}\textgreater{}|Stay on Hetzner| D1["STAY ON HETZNER {-} Re{-}assess quarterly"]}
+\NormalTok{        Q12 {-}{-}\textgreater{}|Any triggers| D2["MIGRATE TO HYBRID {-} Stage 2"]}
+\NormalTok{        Q12 {-}{-}\textgreater{}|Multiple critical| D3["MIGRATE FULL TO EKS {-} Stage 3"]}
+\NormalTok{    end}
+
+\NormalTok{    C1 {-}.{-}\textgreater{} D2}
+\NormalTok{    C2 {-}.{-}\textgreater{} D2}
+\NormalTok{    C3 {-}.{-}\textgreater{} D2}
+\NormalTok{    C4 {-}.{-}\textgreater{} D1}
+\NormalTok{    C5 {-}.{-}\textgreater{} D2}
+\NormalTok{    C6 {-}.{-}\textgreater{} D2}
+\NormalTok{    C7 {-}.{-}\textgreater{} D2}
+\NormalTok{    C8 {-}.{-}\textgreater{} D2}
+\NormalTok{    C9 {-}.{-}\textgreater{} D2}
+\NormalTok{    C10 {-}.{-}\textgreater{} D2}
+\NormalTok{    C11 {-}.{-}\textgreater{} D2}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{Quick Decision Matrix}\label{quick-decision-matrix}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{flowchart LR}
+\NormalTok{    subgraph INPUTS["Inputs"]}
+\NormalTok{        COST["Monthly Spend"]}
+\NormalTok{        COMPLIANCE["Compliance Needs"]}
+\NormalTok{        TEAM["Team Size"]}
+\NormalTok{        WORKLOADS["Workload Type"]}
+\NormalTok{    end}
+
+\NormalTok{    subgraph PROCESS["Decision Engine"]}
+\NormalTok{        CHECK1\{SOC 2 or PCI or HIPAA Required?\}}
+\NormalTok{        CHECK2\{US Enterprise Customers?\}}
+\NormalTok{        CHECK3\{Monthly Spend over $5K?\}}
+\NormalTok{        CHECK4\{Need Managed Services?\}}
+\NormalTok{        CHECK5\{Multi{-}Region HA?\}}
+\NormalTok{    end}
+
+\NormalTok{    subgraph OUTPUTS["Recommended Stage"]}
+\NormalTok{        R1["Stage 1: Hetzner Only Bootstrap MVP EU{-}focused SaaS Dev/Staging"]}
+\NormalTok{        R2["Stage 2: Hetzner plus EKS Hybrid US plus EU mixed Some regulated workloads Growing startup"]}
+\NormalTok{        R3["Stage 3: Full AWS EKS US enterprise primary PCI DSS HIPAA Series B plus IPO path"]}
+\NormalTok{    end}
+
+\NormalTok{    INPUTS {-}{-}\textgreater{} PROCESS}
+\NormalTok{    PROCESS {-}{-}\textgreater{} CHECK1}
+\NormalTok{    CHECK1 {-}{-}\textgreater{}|Yes| R3}
+\NormalTok{    CHECK1 {-}{-}\textgreater{}|No| CHECK2}
+\NormalTok{    CHECK2 {-}{-}\textgreater{}|Yes| R2}
+\NormalTok{    CHECK2 {-}{-}\textgreater{}|No| CHECK3}
+\NormalTok{    CHECK3 {-}{-}\textgreater{}|Yes| CHECK4}
+\NormalTok{    CHECK3 {-}{-}\textgreater{}|No| R1}
+\NormalTok{    CHECK4 {-}{-}\textgreater{}|Yes| R2}
+\NormalTok{    CHECK4 {-}{-}\textgreater{}|No| CHECK5}
+\NormalTok{    CHECK5 {-}{-}\textgreater{}|Yes| R2}
+\NormalTok{    CHECK5 {-}{-}\textgreater{}|No| R1}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{Journey Timeline}\label{journey-timeline}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{gantt}
+\NormalTok{    title Startup Infrastructure Journey}
+\NormalTok{    dateFormat  YYYY{-}MM}
+\NormalTok{    axisFormat  \%m/\%Y}
+
+\NormalTok{    section Stage 1}
+\NormalTok{    Self{-}managed K3s/Talos on Hetzner   :active, t1, 2024{-}01, 2025{-}03}
+\NormalTok{    PostgreSQL + Redis on Hetzner        :t1, 2024{-}01, 2025{-}03}
+\NormalTok{    GitHub Actions to kubectl apply      :t1, 2024{-}01, 2025{-}03}
+\NormalTok{    Scale to 3{-}node cluster             :t1, 2024{-}06, 2025{-}03}
+
+\NormalTok{    section Stage 2}
+\NormalTok{    Provision EKS cluster us{-}east{-}1      :t2, 2025{-}03, 2025{-}07}
+\NormalTok{    Migrate US{-}facing APIs first        :t2, 2025{-}04, 2025{-}07}
+\NormalTok{    Keep EU workloads on Hetzner       :t2, 2025{-}04, 2025{-}07}
+\NormalTok{    Setup ArgoCD GitOps on EKS          :t2, 2025{-}05, 2025{-}07}
+\NormalTok{    Configure AWS Secrets Manager IRSA   :t2, 2025{-}06, 2025{-}09}
+
+\NormalTok{    section Stage 3}
+\NormalTok{    Migrate remaining workloads         :t3, 2025{-}09, 2026{-}03}
+\NormalTok{    Add Aurora Serverless              :t3, 2025{-}10, 2026{-}03}
+\NormalTok{    Enable EKS Auto Mode Fargate        :t3, 2025{-}11, 2026{-}03}
+\NormalTok{    Multi{-}AZ plus Multi{-}Region          :t3, 2025{-}12, 2026{-}03}
+\NormalTok{    Full SOC 2 Type II attestation     :t3, 2026{-}01, 2026{-}03}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{CI/CD Pipeline Evolution}\label{cicd-pipeline-evolution}
+
+\subsubsection{Stage 1 --- Hetzner Only}\label{stage-1-hetzner-only-1}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{sequenceDiagram}
+\NormalTok{    autonumber}
+\NormalTok{    participant DEV as Developer}
+\NormalTok{    participant GH as GitHub}
+\NormalTok{    participant REG as Docker Hub GHCR}
+\NormalTok{    participant RUNNER as GitHub Actions}
+\NormalTok{    participant K8S as K3s/Talos Hetzner}
+\NormalTok{    participant APPS as Applications}
+
+\NormalTok{    DEV{-}\textgreater{}\textgreater{}GH: git push feature{-}branch}
+\NormalTok{    DEV{-}\textgreater{}\textgreater{}GH: Merge to main}
+\NormalTok{    GH{-}\textgreater{}\textgreater{}RUNNER: Trigger workflow}
+
+\NormalTok{    RUNNER{-}\textgreater{}\textgreater{}RUNNER: Run tests}
+\NormalTok{    RUNNER{-}\textgreater{}\textgreater{}RUNNER: lint + security scan}
+\NormalTok{    RUNNER{-}\textgreater{}\textgreater{}REG: docker build + push}
+
+\NormalTok{    RUNNER{-}\textgreater{}\textgreater{}K8S: kubectl set image deployment/api}
+\NormalTok{    RUNNER{-}\textgreater{}\textgreater{}K8S: helm upgrade api chart}
+
+\NormalTok{    K8S{-}\textgreater{}\textgreater{}APPS: Rolling update pods}
+\NormalTok{    K8S{-}{-}\textgreater{}\textgreater{}DEV: Deploy notification}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{Stage 2 --- Hybrid}\label{stage-2-hybrid}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{sequenceDiagram}
+\NormalTok{    autonumber}
+\NormalTok{    participant DEV as Developer}
+\NormalTok{    participant GH as GitHub Actions}
+\NormalTok{    participant ECR as Amazon ECR}
+\NormalTok{    participant GHCR as GH Container Registry}
+\NormalTok{    participant EKS as AWS EKS US Regulated}
+\NormalTok{    participant HETZNER as K3s/Talos Hetzner EU}
+\NormalTok{    participant SM as Secrets Manager AWS}
+
+\NormalTok{    DEV{-}\textgreater{}\textgreater{}GH: git push main}
+\NormalTok{    GH{-}\textgreater{}\textgreater{}GH: Run tests and security scans}
+
+\NormalTok{    par US workloads to EKS}
+\NormalTok{        GH{-}\textgreater{}\textgreater{}ECR: docker build push api{-}us:v3.0.0}
+\NormalTok{        GH{-}\textgreater{}\textgreater{}SM: Fetch DB credentials}
+\NormalTok{        GH{-}\textgreater{}\textgreater{}EKS: kubectl apply us{-}production}
+\NormalTok{        EKS{-}\textgreater{}\textgreater{}EKS: Rolling update US services}
+\NormalTok{        EKS{-}{-}\textgreater{}\textgreater{}DEV: US workload deployed}
+\NormalTok{    and EU workloads to Hetzner}
+\NormalTok{        GH{-}\textgreater{}\textgreater{}GHCR: docker build push api{-}eu:v3.0.0}
+\NormalTok{        GH{-}\textgreater{}\textgreater{}HETZNER: kubectl set image api{-}eu}
+\NormalTok{        HETZNER{-}\textgreater{}\textgreater{}HETZNER: Rolling update EU services}
+\NormalTok{        HETZNER{-}{-}\textgreater{}\textgreater{}DEV: EU workload deployed}
+\NormalTok{    end}
+
+\NormalTok{    Note over SM,HETZNER: External Secrets Operator pulls from AWS SM}
+\end{Highlighting}
+\end{Shaded}
+
+\subsubsection{Stage 3 --- Full EKS}\label{stage-3-full-eks}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{sequenceDiagram}
+\NormalTok{    autonumber}
+\NormalTok{    participant DEV as Developer}
+\NormalTok{    participant GH as GitHub Actions}
+\NormalTok{    participant SONAR as SonarCloud}
+\NormalTok{    participant TRIVY as Trivy}
+\NormalTok{    participant ECR as Amazon ECR}
+\NormalTok{    participant SM as Secrets Manager}
+\NormalTok{    participant TERRAFORM as Terraform Cloud}
+\NormalTok{    participant EKS as AWS EKS}
+\NormalTok{    participant ARGOCD as ArgoCD GitOps}
+\NormalTok{    participant CW as CloudWatch}
+
+\NormalTok{    DEV{-}\textgreater{}\textgreater{}GH: git push main}
+\NormalTok{    GH{-}\textgreater{}\textgreater{}GH: Unit tests}
+\NormalTok{    GH{-}\textgreater{}\textgreater{}SONAR: Static code analysis}
+\NormalTok{    GH{-}\textgreater{}\textgreater{}TRIVY: Container image scan}
+\NormalTok{    TRIVY{-}{-}\textgreater{}\textgreater{}GH: No critical CVEs}
+
+\NormalTok{    par Container Build Push}
+\NormalTok{        GH{-}\textgreater{}\textgreater{}ECR: docker build push api:v4.0.0}
+\NormalTok{        GH{-}\textgreater{}\textgreater{}SM: Fetch secrets via OIDC role}
+\NormalTok{    end}
+
+\NormalTok{    par Infrastructure as Code}
+\NormalTok{        GH{-}\textgreater{}\textgreater{}TERRAFORM: terraform plan}
+\NormalTok{        TERRAFORM{-}{-}\textgreater{}\textgreater{}GH: Plan approved}
+\NormalTok{        GH{-}\textgreater{}\textgreater{}TERRAFORM: terraform apply}
+\NormalTok{        TERRAFORM{-}\textgreater{}\textgreater{}EKS: Update EKS add{-}ons}
+\NormalTok{    end}
+
+\NormalTok{    par GitOps Sync}
+\NormalTok{        ARGOCD{-}\textgreater{}\textgreater{}ECR: Pull new image tag}
+\NormalTok{        ARGOCD{-}\textgreater{}\textgreater{}EKS: kubectl apply auto{-}sync}
+\NormalTok{        ARGOCD{-}{-}\textgreater{}\textgreater{}DEV: GitOps sync complete}
+\NormalTok{    end}
+
+\NormalTok{    EKS{-}\textgreater{}\textgreater{}CW: Emit metrics and logs}
+\NormalTok{    CW{-}\textgreater{}\textgreater{}DEV: Slack alert deployed}
+
+\NormalTok{    Note over GH,DEV: Full audit trail via CloudTrail}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{Cost Comparison}\label{cost-comparison}
+
+\subsubsection{Hetzner vs AWS EKS}\label{hetzner-vs-aws-eks}
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}llll@{}}
+\toprule\noalign{}
+Configuration & Hetzner & AWS EKS & Delta \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+2 vCPU / 4GB RAM & €5.99/mo & \textasciitilde\$48 (€44) & \textbf{7x} \\
+4 vCPU / 8GB RAM & €11.99/mo & \textasciitilde\$96 (€88) &
+\textbf{7x} \\
+8 vCPU / 16GB RAM & €22.99/mo & \textasciitilde\$192 (€176) &
+\textbf{7.5x} \\
+16 vCPU / 32GB RAM & €43.99/mo & \textasciitilde\$384 (€352) &
+\textbf{8x} \\
+32 vCPU / 64GB RAM & €83.99/mo & \textasciitilde\$768 (€704) &
+\textbf{8.5x} \\
+\end{longtable}
+}
+
+\subsubsection{Annual Savings}\label{annual-savings}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Monthly Delta}: \textasciitilde€640
+\item
+  \textbf{Annual Savings on Hetzner}: \textasciitilde€7,680
+\end{itemize}
+
+\subsubsection{Hidden Cost Comparison}\label{hidden-cost-comparison}
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Factor
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Hetzner
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+AWS EKS
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Server cost & Fixed & Plus EKS cluster (\textasciitilde\$73/mo fixed) \\
+DDoS protection & Free & Shield Advanced (additional cost) \\
+Egress costs & 20TB included (EU) & \textasciitilde\$90/TB \\
+Managed K8s & Self-managed & Managed control plane \\
+Managed DB/Cache & None & RDS, ElastiCache \\
+Compliance certs & ISO 27001, BSI C5 only & SOC 2, PCI DSS, HIPAA,
+FedRAMP \\
+Engineer ops time & Higher & Lower \\
+\end{longtable}
+}
+
+\subsubsection{When does EKS ROI make
+sense?}\label{when-does-eks-roi-make-sense}
+
+\begin{itemize}
+\tightlist
+\item
+  Enterprise contract value \textbf{over €10K/mo}
+\item
+  Time saved on ops \textbf{over 20hrs/mo}
+\item
+  Compliance blocks \textbf{over €50K revenue}
+\item
+  Managed DB replaces \textbf{1 engineer}
+\end{itemize}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{Compliance Comparison}\label{compliance-comparison}
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Certification & Hetzner & AWS EKS \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+ISO 27001:2022 & Yes & Yes \\
+BSI C5 Type 2 & Yes & Yes \\
+SOC 2 & No & Yes \\
+PCI DSS Level 1 & No & Yes \\
+HIPAA BAA & No & Yes \\
+FedRAMP & No & Yes \\
+GDPR / EU Data Residency & Yes & Yes (Sovereign Cloud) \\
+\end{longtable}
+}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{License}\label{license}
+
+MIT

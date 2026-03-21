@@ -1,0 +1,24 @@
+gantt
+    title Startup Infrastructure Journey
+    dateFormat  YYYY-MM
+    axisFormat  %m/%Y
+
+    section Stage 1
+    Self-managed K3s/Talos on Hetzner   :active, t1, 2024-01, 2025-03
+    PostgreSQL + Redis on Hetzner        :t1, 2024-01, 2025-03
+    GitHub Actions to kubectl apply      :t1, 2024-01, 2025-03
+    Scale to 3-node cluster             :t1, 2024-06, 2025-03
+
+    section Stage 2
+    Provision EKS cluster us-east-1      :t2, 2025-03, 2025-07
+    Migrate US-facing APIs first        :t2, 2025-04, 2025-07
+    Keep EU workloads on Hetzner       :t2, 2025-04, 2025-07
+    Setup ArgoCD GitOps on EKS          :t2, 2025-05, 2025-07
+    Configure AWS Secrets Manager IRSA   :t2, 2025-06, 2025-09
+
+    section Stage 3
+    Migrate remaining workloads         :t3, 2025-09, 2026-03
+    Add Aurora Serverless              :t3, 2025-10, 2026-03
+    Enable EKS Auto Mode Fargate        :t3, 2025-11, 2026-03
+    Multi-AZ plus Multi-Region          :t3, 2025-12, 2026-03
+    Full SOC 2 Type II attestation     :t3, 2026-01, 2026-03

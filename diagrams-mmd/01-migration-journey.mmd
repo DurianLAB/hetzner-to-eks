@@ -1,0 +1,52 @@
+flowchart TD
+    START([Startup Founded]) --> FUNDING
+    FUNDING{Funding Stage?}
+    FUNDING -->|Bootstrapped| EVAL
+    FUNDING -->|Seed / Series A| EVAL
+
+    EVAL{Hetzner sufficient?}
+    EVAL -->|Yes| DEPLOY
+    EVAL -->|No| ESCALATE
+
+    DEPLOY["Deploy on Hetzner Cloud"] --> K8S
+    K8S["Self-managed K8s (RKE2 / Talos / K3s)"] --> GROW
+    GROW["Iterate & Grow on Hetzner"] --> TRIGGERS
+
+    TRIGGERS{Migration triggers?}
+    TRIGGERS -->|US Enterprise Deals| ESCALATE
+    TRIGGERS -->|SOC 2 Required| ESCALATE
+    TRIGGERS -->|HIPAA / PCI DSS| ESCALATE
+    TRIGGERS -->|$5K+/mo spend| ESCALATE
+    TRIGGERS -->|Multi-region SLA needed| ESCALATE
+    TRIGGERS -->|No triggers| STAY["Stay on Hetzner"]
+
+    ESCALATE["Identify EKS-ready workloads"] --> SEGREGATE
+    SEGREGATE["Segregate workloads"] --> WHICH{Which to migrate first?}
+    WHICH -->|Customer-facing APIs| P1["1. Customer-facing services"]
+    WHICH -->|US customer workloads| P2["2. Regulated workloads"]
+    WHICH -->|Critical path services| P3["3. High-availability services"]
+
+    P1 --> SETUP["Provision EKS Cluster"]
+    P2 --> SETUP
+    P3 --> SETUP
+    SETUP --> CI["Setup CI/CD to EKS"]
+    CI --> FIRST["Migrate first workload"]
+    FIRST --> VERIFY["Verify in production"]
+    VERIFY --> STABLE{Is it stable?}
+    STABLE -->|Yes| KEEP["Keep Hetzner for dev/staging and EU-only services"]
+    STABLE -->|No| ROLLBACK["Rollback to Hetzner"]
+    ROLLBACK --> FIX(["Fix issues and retry"])
+    FIX --> FIRST
+    KEEP --> ITERATE["Iterate: migrate next workload"]
+    ITERATE --> MORE{More workloads?}
+    MORE -->|Yes| WHICH
+    MORE -->|No| HYBRID["Stable Hybrid State"]
+
+    HYBRID --> FUTURE{Long-term strategy?}
+    FUTURE -->|US Enterprise Primary| FULL["Migrate remaining to EKS"]
+    FUTURE -->|Cost Optimization| MULTI["Hetzner + EKS + Spot"]
+    FUTURE -->|EU Sovereignty| EU["Scale Hetzner + use EKS-EU"]
+
+    FULL --> FINAL1["Full AWS EKS Platform"]
+    MULTI --> FINAL2["Multi-Cloud Strategy"]
+    EU --> FINAL3["EU-First with AWS EKS-EU"]

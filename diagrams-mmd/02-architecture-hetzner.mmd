@@ -1,0 +1,36 @@
+flowchart TB
+    subgraph STAGE1["STAGE 1: Hetzner Only"]
+        USERS1["Users / Clients"] --> DDOS1
+        DDOS1["DDoS Protection (Cloudflare)"] --> LB1
+        LB1["Load Balancer (Cloudflare)"] --> FW1
+        FW1["Firewall Rules"] --> ING1
+
+        ING1["Ingress Controller (nginx / Traefik)"] --> API1
+        ING1 --> WEB1["Web App"]
+
+        API1["API Service"] --> WORKER1["Background Workers"]
+        API1 --> DB1["PostgreSQL (Self-managed)"]
+        API1 --> CACHE1["Redis (Self-managed)"]
+        API1 --> OBJ1["Object Storage (Hetzner)"]
+
+        subgraph K8S["Kubernetes Cluster (Self-Managed)"]
+            subgraph NS1["Namespace: production"]
+                ING1
+                API1
+                WEB1
+                WORKER1
+                DB1
+                CACHE1
+                OBJ1
+            end
+            subgraph NS2["Namespace: staging"]
+                ING1B["Ingress"]
+                API1B["API Service"]
+                WEB1B["Web App"]
+            end
+        end
+
+        CI1["CI/CD Runner (GitHub Actions)"] --> ING1
+        MON1["Monitoring (Grafana + Prometheus)"]
+        LOGS1["Logging (Loki)"]
+    end
