@@ -1,0 +1,117 @@
+flowchart TB
+    %% ========================
+    %% STAGE 2: HYBRID (HETZNER + EKS)
+    %% ========================
+    subgraph STAGE2["<b>STAGE 2: Hybrid Architecture (Hetzner + AWS EKS)</b>"]
+
+        subgraph INTERNET["🌐 Internet"]
+            USERS["👥 Users / Clients"]
+            US_USERS["🇺🇸 US Enterprise Users"]
+            EU_USERS["🇪🇺 EU Users"]
+        end
+
+        subgraph ROUTING["Traffic Routing Layer"]
+            CF["Cloudflare"]
+            CF_EU["Cloudflare EU"]
+            CF_US["Cloudflare US"]
+        end
+
+        %% HETZNER SIDE
+        subgraph HETZNER["🇩🇪 Hetzner Cloud (EU-Only / Non-Critical)"]
+            subgraph H_NET["Network"]
+                H_LB["Hetzner Load Balancer"]
+                H_FW["Firewall"]
+            end
+
+            subgraph H_K8S["K3s / Talos Cluster (Self-Managed)"]
+                subgraph H_NS_DEV["Namespace: dev-staging"]
+                    H_WEB_DEV["Web App (dev)"]
+                    H_API_DEV["API (dev)"]
+                end
+
+                subgraph H_NS_EU["Namespace: eu-services"]
+                    H_EU_API["EU-Only API Service"]
+                    H_EU_DB["PostgreSQL (EU data residency)"]
+                    H_CACHE["Redis (EU)"]
+                end
+            end
+
+            subgraph H_STORAGE["Storage"]
+                H_OBJ["Hetzner Object Storage<br/>(Backups, Media)"]
+                H_BLOB["Blob Storage"]
+            end
+        end
+
+        %% AWS SIDE
+        subgraph AWS["☁️ AWS (US / Regulated / Critical)"]
+            subgraph AWS_VPC["VPC"]
+                subgraph AWS_EKS["EKS Cluster"]
+                    subgraph AWS_NS1["Namespace: us-production"]
+                        AWS_ING["AWS Load Balancer Controller"]
+                        subgraph AWS_SVC["Services"]
+                            AWS_API["API Service"]
+                            AWS_WEB["Web Service"]
+                            AWS_WORKER["Workers (SQS-triggered)"]
+                        end
+                    end
+
+                    subgraph AWS_NS2["Namespace: regulated"]
+                        AWS_COMPLIANCE["Compliance Workloads"]
+                    end
+                end
+
+                subgraph AWS_DATA["Managed Data Services"]
+                    AWS_RDS["RDS PostgreSQL<br/>(Multi-AZ)"]
+                    AWS_ELastiCache["ElastiCache Redis"]
+                    AWS_S3["S3 Buckets"]
+                    AWS_SQS["SQS Queues"]
+                    AWS_SNS["SNS Notifications"]
+                    AWS_SECRETS["Secrets Manager"]
+                end
+
+                subgraph AWS_MGMT["AWS Management"]
+                    AWS_CW["CloudWatch"]
+                    AWS_XRAY["X-Ray"]
+                    AWS_CFN["CloudFormation / Terraform"]
+                end
+            end
+
+            subgraph CI_CD["CI/CD Pipeline"]
+                GH_ACTIONS["GitHub Actions"]
+                GH_ACTIONS -->|"docker build push"| ECR["ECR Registry"]
+                ECR -->|"helm deploy"| AWS_EKS
+                GH_ACTIONS -->|"kubectl apply"| H_K8S
+            end
+        end
+
+        %% CONNECTIONS
+        USERS --> CF
+        US_USERS --> CF_US
+        EU_USERS --> CF_EU
+
+        CF_EU --> H_LB
+        CF_US --> AWS_ING
+
+        H_LB --> H_FW
+        H_FW --> H_EU_API
+        H_EU_API --> H_EU_DB
+        H_EU_API --> H_CACHE
+        H_EU_API --> H_OBJ
+
+        AWS_ING --> AWS_API
+        AWS_API --> AWS_RDS
+        AWS_API --> AWS_ELastiCache
+        AWS_API --> AWS_S3
+        AWS_WORKER --> AWS_SQS
+        AWS_API --> AWS_SECRETS
+
+        %% Cross-cloud communication
+        H_EU_API -.->|"VPN / Private Link"| AWS_API
+        AWS_API -.-.->|"S3 replication"| H_OBJ
+    end
+
+    classDef hetzner fill:#0050a0,stroke:#00aaff,color:#ffffff
+    classDef eks fill:#ff9900,stroke:#ffcc00,color:#000000
+    classDef aws_other fill:#232f3e,stroke:#ff9900,color:#ffffff
+    classDef ci fill:#1b5e20,stroke:#66bb6a,color:#ffffff
+    classDef internet fill:#37474f,stroke:#90a4ae,color:#ffffff

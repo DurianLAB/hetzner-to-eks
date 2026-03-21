@@ -1,0 +1,150 @@
+flowchart TB
+    %% ========================
+    %% STAGE 3: FULL AWS EKS
+    %% ========================
+    subgraph STAGE3["<b>STAGE 3: Full AWS EKS Architecture</b>"]
+
+        subgraph PUBLIC["🌐 Public Internet"]
+            USERS3["👥 Users"]
+            PARTNERS["🤝 Partners / APIs"]
+            CDN["CloudFront CDN"]
+        end
+
+        subgraph EDGE["Edge / Security Layer"]
+            WAF["AWS WAF<br/>(DDoS + Rate Limiting)"]
+            SHIELD["AWS Shield Advanced"]
+            ACM["ACM Certificates"]
+        end
+
+        subgraph AWS_VPC["AWS VPC"]
+            subgraph PUB["Public Subnets"]
+                ALB["Application Load Balancer"]
+            end
+
+            subgraph PRIV["Private Subnets — EKS Cluster"]
+                subgraph EKS_NAMESPACES["Namespaces"]
+
+                    subgraph PROD["namespace: production"]
+                        subgraph PROD_ING["Ingress (AWS LB Controller)"]
+                            PROD_INGRESS["Ingress NGINX / AWS LB"]
+                        end
+                        subgraph PROD_APP["Application Layer"]
+                            PROD_WEB["Web App<br/>🖥️ Deployment"]
+                            PROD_API["API Gateway / Service<br/>🖥️ Deployment"]
+                            PROD_WORKER["Async Workers<br/>🖥️ Deployment"]
+                        end
+                        subgraph PROD_ML["ML / AI Services"]
+                            PROD_INFERENCE["Inference Endpoints"]
+                            PROD_TRAINING["Training Jobs (Batch)"]
+                        end
+                    end
+
+                    subgraph STAGING["namespace: staging"]
+                        STAGING_WEB["Web App"]
+                        STAGING_API["API"]
+                    end
+
+                    subgraph MGMT_NS["namespace: management"]
+                        MGMT1["Prometheus + Grafana"]
+                        MGMT2["ArgoCD / Flux CD"]
+                        MGMT3["External Secrets Operator"]
+                    end
+                end
+
+                subgraph EKS_ADDONS["EKS Add-ons"]
+                    COREDNS["CoreDNS"]
+                    VPC_CNI["VPC CNI"]
+                    EBS_CSI["EBS CSI (Persistent Storage)"]
+                    EFS_CSI["EFS CSI (Shared Storage)"]
+                    LB_CONTROLLER["AWS Load Balancer Controller"]
+                    METRICS["Metrics Server"]
+                end
+            end
+
+            subgraph DATA_LAYER["Data Services (AWS Managed)"]
+                subgraph CACHE["Cache"]
+                    ELASTICACHE["ElastiCache Redis<br/>(Clustered)"]
+                end
+                subgraph DATABASES["Databases"]
+                    RDS_PRIMARY["RDS PostgreSQL<br/>(Multi-AZ, Read Replicas)"]
+                    AURORA["Aurora Serverless<br/>(Auto-scaling)"]
+                end
+                subgraph STORAGE["Object & File Storage"]
+                    S3_WEB["S3 — Static Assets"]
+                    S3_BACKUP["S3 — Database Backups"]
+                    EFS["EFS — Shared Filesystem"]
+                end
+                subgraph MESSAGING["Messaging"]
+                    SQS["SQS — Task Queues"]
+                    SNS["SNS — Pub/Sub"]
+                    EVENT_BRIDGE["EventBridge — Event Bus"]
+                end
+                subgraph ML_SVC["AI/ML Services"]
+                    SAGEMAKER["SageMaker Endpoints"]
+                    BEDROCK["Bedrock (LLM APIs)"]
+                end
+            end
+
+            subgraph SECURITY["Security Services"]
+                SECRETS["Secrets Manager"]
+                KMS["KMS (Encryption at rest)"]
+                IAM["IAM Roles / IRSA"]
+                GUARD_DUTY["GuardDuty (Threat Detection)"]
+                SECURITY_HUB["Security Hub"]
+                CLOUDFORM["CloudTrail (Audit Logs)"]
+            end
+
+            subgraph CI_CD["CI/CD & DevOps"]
+                GITHUB["GitHub Actions"]
+                ECR["ECR — Container Registry"]
+                ARGOCD["ArgoCD — GitOps"]
+                TERRAFORM["Terraform (IaC)"]
+                PAGER_DUTY["PagerDuty"]
+            end
+        end
+
+        %% CONNECTIONS
+        USERS3 --> CDN
+        PARTNERS --> CDN
+        CDN --> WAF
+        WAF --> SHIELD
+        SHIELD --> ACM
+        ACM --> ALB
+
+        ALB --> PROD_INGRESS
+        PROD_INGRESS --> PROD_WEB
+        PROD_INGRESS --> PROD_API
+        PROD_API --> PROD_WORKER
+
+        PROD_API --> RDS_PRIMARY
+        PROD_API --> ELASTICACHE
+        PROD_API --> S3_WEB
+        PROD_API --> SQS
+        PROD_API --> SECRETS
+        PROD_API --> KMS
+
+        PROD_WORKER --> SQS
+        PROD_WORKER --> RDS_PRIMARY
+
+        PROD_INFERENCE --> BEDROCK
+        PROD_INFERENCE --> SAGEMAKER
+
+        RDS_PRIMARY --> S3_BACKUP
+        S3_WEB --> CLOUDFORM
+
+        GITHUB --> ECR
+        ECR --> ARGOCD
+        ARGOCD -->|"gitops"| EKS_NAMESPACES
+        TERRAFORM -->|"terraform apply"| AWS_VPC
+
+        GUARD_DUTY --> SECURITY_HUB
+        SECURITY_HUB --> PAGER_DUTY
+    end
+
+    classDef eks fill:#ff9900,stroke:#ffcc00,color:#000000
+    classDef aws_other fill:#232f3e,stroke:#ff9900,color:#ffffff
+    classDef data fill:#4a148c,stroke:#ce93d8,color:#ffffff
+    classDef sec fill:#b71c1c,stroke:#ef5350,color:#ffffff
+    classDef cicd fill:#1b5e20,stroke:#66bb6a,color:#ffffff
+    classDef edge fill:#37474f,stroke:#90a4ae,color:#ffffff
+    classDef public fill:#4e342e,stroke:#a1887f,color:#ffffff

@@ -1,0 +1,37 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1e3a5f', 'primaryTextColor': '#fff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#90a4ae', 'secondaryColor': '#1b5e20', 'tertiaryColor': '#b71c1c'}}}%%
+sequenceDiagram
+    autonumber
+    Title: Stage 1 — CI/CD Pipeline (Hetzner Only)
+
+    actor DEV as 👨‍💻 Developer
+    participant GH as GitHub
+    participant REG as Docker Hub<br/>(or GHCR)
+    participant RUNNER as GitHub<br/>Actions Runner
+    participant K8S as K3s/Talos<br/>(Hetzner)
+    participant APPS as Applications
+
+    DEV->>GH: git push feature-branch
+    GH->>GH: Pull Request opened
+    DEV->>GH: Merge to main
+    GH->>RUNNER: Trigger workflow
+
+    RUNNER->>RUNNER: Run tests (pytest / jest)
+    RUNNER->>RUNNER: lint + security scan
+    RUNNER->>REG: docker build + docker push
+    Note over RUNNER,REG: Image: api:v2.1.0
+
+    RUNNER->>K8S: kubectl set image deployment/api
+    RUNNER->>K8S: kubectl rollout status
+    RUNNER->>K8S: helm upgrade --install api ./charts/api
+    Note over RUNNER,K8S: Uses kubeconfig with Hetzner node IP
+
+    K8S->>APPS: Rolling update pods
+    K8S-->>DEV: ✅ Deploy notification
+
+    rect rgba(0, 50, 100, 0.1)
+        Note over RUNNER,K8S: Manual steps still required:
+        - SSH into nodes for OS patches
+        - Backup DB before migrations
+        - Manually scale nodes via Hetzner Console
+        - No auto-healing beyond K8s level
+    end

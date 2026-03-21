@@ -1,0 +1,85 @@
+flowchart TD
+    %% Styling
+    classDef stage fill:#1e3a5f,stroke:#4fc3f7,color:#ffffff
+    classDef decision fill:#b8860b,stroke:#ffd700,color:#ffffff
+    classDef action fill:#1b5e20,stroke:#66bb6a,color:#ffffff
+    classDef trigger fill:#7b1fa2,stroke:#ce93d8,color:#ffffff
+    classDef end fill:#b71c1c,stroke:#ef5350,color:#ffffff
+    classDef hn fill:#0050a0,stroke:#00aaff,color:#ffffff
+    classDef eks fill:#ff9900,stroke:#ffcc00,color:#000000
+
+    %% Start
+    START([🚀 Startup Founded]) --> FUNDING
+
+    FUNDING{"Funding Stage?"}
+    FUNDING -->|Bootstrapped / Pre-Seed| EVAL_HETZNER
+    FUNDING -->|Seed / Series A| EVAL_HETZNER
+
+    %% Stage 1: Hetzner Only
+    subgraph STAGE_1["<b>STAGE 1: Hetzner Foundation</b>"]
+        EVAL_HETZNER{["Is Hetzner sufficient?"]}
+        EVAL_HETZNER -->|Yes| DEPLOY_HETZNER
+        EVAL_HETZNER -->|No| ESCALATE_EKS
+
+        DEPLOY_HETZNER["Deploy on Hetzner Cloud"]
+        DEPLOY_HETZNER --> K8S_HETZNER["Self-managed Kubernetes<br/>(RKE2 / Talos / K3s)"]
+        K8S_HETZNER --> GROW_HETZNER["Iterate & Grow on Hetzner"]
+        GROW_HETZNER --> MONITOR_TRIGGERS
+
+        MONITOR_TRIGGERS{"Monitoring Triggers..."}
+        MONITOR_TRIGGERS -->|"US Enterprise Deals"| ESCALATE_EKS
+        MONITOR_TRIGGERS -->|"SOC 2 Required"| ESCALATE_EKS
+        MONITOR_TRIGGERS -->|"HIPAA / PCI DSS"| ESCALATE_EKS
+        MONITOR_TRIGGERS -->|"$5K+/mo infra spend"| COST_REVIEW
+        MONITOR_TRIGGERS -->|"Multi-region SLA needed"| ESCALATE_EKS
+        MONITOR_TRIGZ["✅ No triggers — stay on Hetzner"]
+        MONITOR_TRIGGERS -->|"No triggers"| MONITOR_TRIGZ
+    end
+
+    %% Stage 2: Hybrid
+    subgraph STAGE_2["<b>STAGE 2: Hetzner + AWS Hybrid</b>"]
+        ESCALATE_EKS["Identify EKS-ready workloads"]
+        ESCALATE_EKS --> SEGREGATE["Segregate workloads"]
+        
+        SEGREGATE --> WHICH_MIGRATE{"Which to migrate first?"}
+        WHICH_MIGRATE -->|"Customer-facing APIs"| PRIORITY_1["1. Customer-facing services"]
+        WHICH_MIGRATE -->|"US customer workloads"| PRIORITY_2["2. Regulated workloads"]
+        WHICH_MIGRATE -->|"Critical path services"| PRIORITY_3["3. High-availability services"]
+
+        PRIORITY_1 --> SETUP_EKS["Provision EKS Cluster"]
+        PRIORITY_2 --> SETUP_EKS
+        PRIORITY_3 --> SETUP_EKS
+        SETUP_EKS --> CI_CD_EKS["Setup CI/CD to EKS"]
+        CI_CD_EKS --> MIGRATE_FIRST["Migrate first workload"]
+        MIGRATE_FIRST --> VERIFY["Verify in production"]
+        VERIFY --> STABLE{["Is it stable?"]}
+        STABLE -->|Yes| HETZNER_STAYS["Keep Hetzner for:<br/>- Dev/Staging<br/>- Non-critical workloads<br/>- EU-only services"]
+        STABLE -->|No| ROLLBACK["Rollback to Hetzner"]
+        ROLLBACK --> FIX(["Fix issues, retry"])
+        FIX --> MIGRATE_FIRST
+        HETZNER_STAYS --> ITERATE_MIGRATION["Iterate: migrate next workload"]
+        ITERATE_MIGRATION --> MORE{"More workloads?"}
+        MORE -->|Yes| WHICH_MIGRATE
+        MORE -->|No| HYBRID_STABLE["✅ Stable Hybrid State"]
+    end
+
+    %% Stage 3: Full EKS or Multi-Cloud
+    subgraph STAGE_3["<b>STAGE 3: Full EKS (or Multi-Cloud)</b>"]
+        HYBRID_STABLE --> DECIDE_FUTURE{"Long-term strategy?"}
+        DECIDE_FUTURE -->|"Primary: US Enterprise"| FULL_EKS["Migrate remaining workloads to EKS"]
+        DECIDE_FUTURE -->|"Cost optimization"| MULTI["Hetzner + EKS + Spot"]
+        DECIDE_FUTURE -->|"EU Sovereignty"| EU_FOCUS["Scale Hetzner, use EKS-EU"]
+
+        FULL_EKS --> FINAL_EKS["✅ Full AWS EKS Platform"]
+        MULTI --> FINAL_MULTI["✅ Multi-Cloud Strategy"]
+        EU_FOCUS --> FINAL_EU["✅ EU-First with AWS EKS-EU"]
+    end
+
+    %% Stage Labels
+    START1[STAGE 1<br/>Hetzner Only]:::stage
+    START2[STAGE 2<br/>Hybrid]:::stage
+    START3[STAGE 3<br/>Full EKS]:::stage
+
+    START -.-> STAGE_1
+    STAGE_1 -.-> STAGE_2
+    STAGE_2 -.-> STAGE_3

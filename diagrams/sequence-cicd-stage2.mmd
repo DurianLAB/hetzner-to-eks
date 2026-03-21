@@ -1,0 +1,44 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1e3a5f', 'primaryTextColor': '#fff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#90a4ae', 'secondaryColor': '#1b5e20', 'tertiaryColor': '#b71c1c'}}}%%
+sequenceDiagram
+    autonumber
+    Title: Stage 2 — CI/CD Pipeline (Hetzner + AWS EKS Hybrid)
+
+    actor DEV as 👨‍💻 Developer
+    participant GH as GitHub Actions
+    participant ECR as Amazon ECR
+    participant GHCR as GH Container<br/>Registry (Hetzner)
+    participant EKS as AWS EKS<br/>(US/Regulated)
+    participant HETZNER as K3s/Talos<br/>(Hetzner EU)
+    participant SM as Secrets Manager<br/>(AWS)
+    participant ArgoCD as ArgoCD<br/>(GitOps)
+
+    DEV->>GH: git push main
+    GH->>GH: Run tests & security scans
+
+    par Migrate to EKS (US workloads)
+        GH->>ECR: docker build + docker push<br/>api-us:v3.0.0
+        GH->>SM: Fetch DB credentials
+        GH->>SM: Fetch EKS cluster credentials
+        GH->>EKS: kubectl apply -f k8s/us-production/
+        GH->>EKS: kubectl set image deployment/api-us
+        EKS->>EKS: Rolling update US services
+        EKS-->>DEV: ✅ US workload deployed
+    and Migrate to Hetzner (EU workloads)
+        GH->>GHCR: docker build + docker push<br/>api-eu:v3.0.0
+        GH->>HETZNER: kubectl set image deployment/api-eu
+        HETZNER->>HETZNER: Rolling update EU services
+        HETZNER-->>DEV: ✅ EU workload deployed
+    end
+
+    rect rgba(0, 100, 0, 0.1)
+        Note over GH,EKS: GitOps sync for subsequent commits:
+        ArgoCD monitors repo → auto-syncs to EKS
+        GitHub Actions triggers K3s push for Hetzner
+    end
+
+    DEV->>ArgoCD: Merge to main (EKS)
+    ArgoCD->>ArgoCD: Detect drift / sync
+    ArgoCD->>EKS: kubectl apply (EKS workloads)
+    ArgoCD-->>DEV: ✅ EKS in sync
+
+    Note over SM,HETZNER: Cross-cloud secret sharing:<br/>External Secrets Operator<br/>pulls from AWS SM → injects into Hetzner K8s

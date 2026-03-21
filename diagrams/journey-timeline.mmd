@@ -1,0 +1,30 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#1e3a5f', 'primaryTextColor': '#fff', 'primaryBorderColor': '#4fc3f7', 'lineColor': '#90a4ae', 'secondaryColor': '#1b5e20', 'tertiaryColor': '#b71c1c'}}}%%
+timeline
+    title Startup Infrastructure Journey: Hetzner → AWS EKS
+
+    section 🚀 Stage 1: Hetzner Foundation
+        Bootstrapped MVP launch : Self-managed K3s/Talos on Hetzner
+        : PostgreSQL on Hetzner + Redis
+        : GitHub Actions → kubectl apply
+        : 2 vCPU / 4GB @ €5.99/mo
+        
+        Growth phase : Add monitoring (Grafana + Loki)
+        : Enable Cloudflare in front
+        : Scale to 3-node cluster
+
+    section 🔄 Stage 2: Hetzner + EKS Hybrid
+        First US customer : Provision EKS cluster (us-east-1)
+        : Migrate US-facing APIs first
+        : Keep EU workloads on Hetzner
+        : Setup ArgoCD GitOps on EKS
+        
+        Compliance need : Configure AWS Secrets Manager + IRSA
+        : Enable CloudTrail + GuardDuty
+        : Sign BAA for future HIPAA workloads
+
+    section 🏢 Stage 3: Full AWS EKS
+        Enterprise scale : Migrate remaining workloads
+        : Add Aurora Serverless for DB
+        : Enable EKS Auto Mode / Fargate
+        : Multi-AZ + Multi-Region
+        : Full SOC 2 Type II attestation

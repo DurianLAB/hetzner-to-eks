@@ -1,0 +1,55 @@
+flowchart TD
+    subgraph LEGEND["📊 Cost Comparison Overview"]
+
+        subgraph TABLE["Monthly Infrastructure Cost Comparison"]
+            direction TB
+            HEADER["| Configuration | Hetzner | AWS EKS | Delta |"]
+            ROW1["| 2 vCPU / 4GB RAM | €5.99 | ~$48 (€44) | 7x |"]
+            ROW2["| 4 vCPU / 8GB RAM | €11.99 | ~$96 (€88) | 7x |"]
+            ROW3["| 8 vCPU / 16GB RAM | €22.99 | ~$192 (€176) | 7.5x |"]
+            ROW4["| 16 vCPU / 32GB RAM | €43.99 | ~$384 (€352) | 8x |"]
+            ROW5["| 32 vCPU / 64GB RAM | €83.99 | ~$768 (€704) | 8.5x |"]
+        end
+
+        subgraph BREAK_EVEN["Break-Even Analysis"]
+            direction LR
+            BE1["Hetzner €100/mo"]
+            BE2["AWS EKS ~$800/mo"]
+            BE3["Monthly Delta: ~€640"]
+            BE4["Annual Delta: ~€7,680"]
+            BE5["Year 1 savings on Hetzner: ~€7,680"]
+            BE1 --> BE3
+            BE2 --> BE3
+            BE3 --> BE4
+            BE4 --> BE5
+        end
+
+        subgraph HIDDEN["Hidden Cost Comparison"]
+            direction TB
+            H1["<b>On Hetzner you pay:</b>"]
+            H2["✅ Server cost only"]
+            H3["✅ Free DDoS protection"]
+            H4["✅ 20TB egress (EU)"]
+            H5["✅ No egress surprise bills"]
+            H6["❌ Engineer time for K8s ops"]
+            H7["❌ No managed services"]
+            H8["❌ No compliance certs"]
+            
+            H1b["<b>On AWS EKS you pay:</b>"]
+            H2b["✅ EKS cluster (~$73/mo fixed)"]
+            H3b["✅ Managed K8s control plane"]
+            H4b["✅ RDS, ElastiCache, S3, etc."]
+            H5b["✅ SOC 2 / ISO 27001 / PCI"]
+            H6b["❌ Egress costs (~$90/ TB)"]
+            H7b["❌ Data transfer costs"]
+            H8b["❌ Reserved/Spot strategy needed"]
+        end
+
+        subgraph ROI["When does EKS ROI make sense?"]
+            direction TB
+            ROI1["💰 Enterprise contract value > €10K/mo"]
+            ROI2["💰 Time saved on ops > 20hrs/mo"]
+            ROI3["💰 Compliance blocks > €50K revenue"]
+            ROI4["💰 Managed DB replaces 1 engineer"]
+        end
+    end

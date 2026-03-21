@@ -1,0 +1,64 @@
+flowchart TB
+    %% ========================
+    %% STAGE 1: HETZNER ONLY
+    %% ========================
+    subgraph STAGE1["<b>STAGE 1: Hetzner Only Architecture</b>"]
+        subgraph ST1_INTERNET["🌐 Internet"]
+            USERS1["👥 Users / Clients"]
+        end
+
+        subgraph ST1_HETZNER["🇩🇪 Hetzner Cloud (Nuremberg / Finland)"]
+            subgraph ST1_NET["Network Layer"]
+                LB1["Load Balancer (Cloudflare / OctoLoad)"]
+                FW1["Firewall Rules"]
+                DDOS1["DDoS Protection (Cloudflare)"]
+            end
+
+            subgraph ST1_K8S["Kubernetes Cluster (Self-Managed)"]
+                subgraph ST1_NS1["Namespace: production"]
+                    ING1["Ingress Controller<br/>(nginx / Traefik)"]
+                    subgraph ST1_SVC1["Services"]
+                        API1["API Service<br/>🖥️ Pods"]
+                        WEB1["Web App<br/>🖥️ Pods"]
+                        WORKER1["Background Workers<br/>🖥️ Pods"]
+                    end
+                    subgraph ST1_DATA1["Data Layer"]
+                        DB1["PostgreSQL<br/>(Self-managed / External)"]
+                        CACHE1["Redis<br/>(Self-managed)"]
+                        OBJ1["Object Storage<br/>(Hetzner Storage Box)"]
+                    end
+                end
+
+                subgraph ST1_NS2["Namespace: staging"]
+                    ING1B["Ingress"]
+                    API1B["API Service"]
+                    WEB1B["Web App"]
+                end
+            end
+
+            subgraph ST1_MGMT["Management"]
+                MON1["Monitoring<br/>(Grafana + Prometheus)"]
+                LOGS1["Logging<br/>(Loki / ELK)"]
+                CI1["CI/CD Runner<br/>(GitLab CI / GitHub Actions)"]
+            end
+        end
+
+        USERS1 --> DDOS1
+        DDOS1 --> LB1
+        LB1 --> FW1
+        FW1 --> ING1
+        ING1 --> API1
+        ING1 --> WEB1
+        API1 --> WORKER1
+        API1 --> DB1
+        API1 --> CACHE1
+        API1 --> OBJ1
+        CI1 -->|"kubectl apply"| ING1
+    end
+
+    classDef hetzner fill:#0050a0,stroke:#00aaff,color:#ffffff
+    classDef eks fill:#ff9900,stroke:#ffcc00,color:#000000
+    classDef internet fill:#37474f,stroke:#90a4ae,color:#ffffff
+    classDef mgmt fill:#1b5e20,stroke:#66bb6a,color:#ffffff
+    classDef stage_header fill:#1e3a5f,stroke:#4fc3f7,color:#ffffff
+    classDef warning fill:#b71c1c,stroke:#ef5350,color:#ffffff
