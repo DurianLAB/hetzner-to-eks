@@ -587,6 +587,72 @@ sequenceDiagram
 
 ---
 
+## Converting Diagrams
+
+### Prerequisites
+
+```bash
+# Install mermaid-cli via npx
+npx --yes @mermaid-js/mermaid-cli mmdc --version
+```
+
+### Extract Mermaid Diagrams
+
+```bash
+# Extract mermaid blocks from README.md to .mmd files
+python3 extract_diagrams.py
+```
+
+### Convert to PNG
+
+```bash
+# Find mermaid-cli path
+MMDC=$(find ~/.npm/_npx -name "cli.js" -path "*/mermaid-cli/*" | head -1)
+
+# Convert single diagram
+node "$MMDC" -i diagrams-mmd/01-migration-journey.mmd \
+  -o output.png -w 1920 -H 1080 -b white
+
+# Convert all diagrams
+for f in diagrams-mmd/*.mmd; do
+  name=$(basename "$f" .mmd)
+  node "$MMDC" -i "$f" -o "diagrams-png/${name}.png" -w 1920 -H 1080 -b white
+done
+```
+
+### Convert to PDF
+
+```bash
+# Find mermaid-cli path
+MMDC=$(find ~/.npm/_npx -name "cli.js" -path "*/mermaid-cli/*" | head -1)
+
+# Convert single diagram
+node "$MMDC" -i diagrams-mmd/01-migration-journey.mmd \
+  -o output.pdf -w 1920 -H 1080
+
+# Convert all diagrams
+mkdir -p diagrams-pdf
+for f in diagrams-mmd/*.mmd; do
+  name=$(basename "$f" .mmd)
+  node "$MMDC" -i "$f" -o "diagrams-pdf/${name}.pdf" -w 1920 -H 1080
+done
+```
+
+### Using Kroki API (Alternative)
+
+```python
+# Using convert_diagrams.py with Kroki API
+python3 convert_diagrams.py
+```
+
+### Pre-generated Diagrams
+
+Pre-generated diagrams are available in:
+- `diagrams-png/` - PNG format (for documents)
+- `diagrams-pdf/` - PDF format (for printing)
+
+---
+
 ## License
 
 MIT
