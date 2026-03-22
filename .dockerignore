@@ -3,7 +3,7 @@
 .gitignore
 
 # Documentation
-*.md
+!README.md
 diagrams-mmd
 diagrams-png
 diagrams-pdf
