@@ -1,0 +1,24 @@
+apiVersion: v2
+name: hetzner-to-eks
+description: A Helm chart for deploying Hetzner to AWS EKS migration documentation site
+
+type: application
+
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - docsify
+  - documentation
+  - kubernetes
+  - migration
+  - hetzner
+  - aws
+  - eks
+
+maintainers:
+  - name: DurianLAB
+    url: https://github.com/DurianLAB
+
+sources:
+  - https://github.com/DurianLAB/hetzner-to-eks

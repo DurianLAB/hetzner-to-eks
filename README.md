@@ -587,6 +587,94 @@ sequenceDiagram
 
 ---
 
+## Deployment
+
+### Prerequisites
+
+- **Docker** (for building images)
+- **Helm 3+** (for Kubernetes deployments)
+- **kubectl** (configured with cluster access)
+
+### Quick Start
+
+```bash
+# 1. Build and run locally
+docker build -t hetzner-to-eks:local .
+docker run -p 8080:80 hetzner-to-eks:local
+
+# 2. Deploy to Kubernetes using Helm
+helm repo add bitnami https://charts.bitnami.com/bitnami || true
+helm install hetzner-to-eks ./helm/hetzner-to-eks \
+  --namespace docs --create-namespace \
+  --set ingress.enabled=true \
+  --set ingress.hosts[0].host=docs.example.com
+
+# 3. Or use the deploy script
+./scripts/deploy.sh install -n docs
+```
+
+### Deploy with Custom Values
+
+```bash
+# Create custom values file
+cat > my-values.yaml << EOF
+replicaCount: 3
+ingress:
+  enabled: true
+  hosts:
+    - host: my-docs.example.com
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 200m
+EOF
+
+# Deploy with custom values
+./scripts/deploy.sh install -n docs -f my-values.yaml
+```
+
+### Build Docker Image
+
+```bash
+# Build and push to registry
+./scripts/build.sh all
+
+# Or manually
+docker build -t durianlab/hetzner-to-eks:latest .
+docker push durianlab/hetzner-to-eks:latest
+```
+
+### Helm Chart Structure
+
+```
+helm/hetzner-to-eks/
+├── Chart.yaml          # Chart metadata
+├── values.yaml         # Default configuration
+└── templates/
+    ├── deployment.yaml  # Deployment manifest
+    ├── service.yaml    # Service manifest
+    ├── ingress.yaml    # Ingress manifest
+    ├── hpa.yaml        # Horizontal Pod Autoscaler
+    ├── _helpers.tpl   # Helper templates
+    └── NOTES.txt      # Post-install notes
+```
+
+### Configuration Options
+
+| Parameter | Description | Default |
+|---|---|---|
+| `replicaCount` | Number of replicas | `2` |
+| `image.repository` | Docker image | `durianlab/hetzner-to-eks` |
+| `image.tag` | Image tag | `latest` |
+| `service.type` | Service type | `ClusterIP` |
+| `ingress.enabled` | Enable Ingress | `true` |
+| `ingress.hosts[].host` | Hostname | `docs.example.com` |
+| `resources.limits.cpu` | CPU limit | `500m` |
+| `resources.limits.memory` | Memory limit | `256Mi` |
+| `autoscaling.enabled` | Enable HPA | `false` |
+
+---
+
 ## Converting Diagrams
 
 ### Prerequisites
