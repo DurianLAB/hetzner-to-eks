@@ -6,7 +6,7 @@ RUN apk add --no-cache curl
 # Copy README.md to be served as index
 COPY README.md /usr/share/nginx/html/README.md
 
-# Create a simple HTML wrapper that renders README.md content
+# Create HTML wrapper with proper markdown and mermaid rendering
 RUN cat > /usr/share/nginx/html/index.html << 'HTMLEOF'
 <!DOCTYPE html>
 <html lang="en">
@@ -14,7 +14,13 @@ RUN cat > /usr/share/nginx/html/index.html << 'HTMLEOF'
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hetzner to AWS EKS Migration Guide</title>
+    
+    <!-- Mermaid -->
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    
+    <!-- Marked.js for markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+    
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -34,64 +40,98 @@ RUN cat > /usr/share/nginx/html/index.html << 'HTMLEOF'
         tr:nth-child(even) { background: #fafafa; }
         code { background: #f4f4f4; padding: 0.2rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
         pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 8px; overflow-x: auto; margin: 1rem 0; }
-        pre code { background: transparent; padding: 0; }
-        .mermaid { background: #fff; text-align: center; margin: 2rem 0; }
+        pre code { background: transparent; padding: 0; color: #d4d4d4; }
+        .mermaid { background: #fff; text-align: center; margin: 2rem 0; padding: 1rem; border: 1px solid #eee; border-radius: 8px; }
         hr { border: none; border-top: 1px solid #eee; margin: 2rem 0; }
         a { color: #0066cc; text-decoration: none; }
         a:hover { text-decoration: underline; }
-        blockquote { border-left: 4px solid #ddd; padding-left: 1rem; margin: 1rem 0; color: #666; }
+        #loading { color: #666; font-style: italic; }
+        .error { color: #c00; background: #fee; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
     </style>
 </head>
 <body>
-    <div id="content">Loading...</div>
+    <div id="content">
+        <p id="loading">Loading documentation...</p>
+    </div>
+    
     <script>
-        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+        // Initialize Mermaid with proper settings
+        mermaid.initialize({ 
+            startOnLoad: false,
+            theme: 'default',
+            securityLevel: 'loose',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        });
+
+        // Configure marked to handle code blocks properly
+        marked.setOptions({
+            highlight: function(code, lang) {
+                if (lang === 'mermaid') {
+                    // Return mermaid code as-is for later processing
+                    return '<div class="mermaid">' + code + '</div>';
+                }
+                return code;
+            },
+            langPrefix: 'language-',
+            breaks: false,
+            gfm: true
+        });
+
+        // Custom renderer for code blocks
+        const renderer = new marked.Renderer();
+        const originalCodeRenderer = renderer.code.bind(renderer);
+        
+        renderer.code = function(code, lang, escaped) {
+            if (lang === 'mermaid') {
+                // Return mermaid div directly
+                return '<div class="mermaid">' + code + '</div>';
+            }
+            // For other code blocks, escape HTML
+            const escapedCode = code
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            const langClass = lang ? ` language-${lang}` : '';
+            return `<pre><code class="${langClass}">${escapedCode}</code></pre>`;
+        };
+
+        marked.use({ renderer });
 
         async function loadReadme() {
+            const contentDiv = document.getElementById('content');
+            
             try {
                 const response = await fetch('README.md');
+                if (!response.ok) {
+                    throw new Error('Failed to load README.md');
+                }
+                
                 let markdown = await response.text();
                 
-                // Convert markdown to HTML
-                markdown = markdown
-                    // Headers
-                    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-                    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-                    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-                    // Code blocks (mermaid)
-                    .replace(/```mermaid\n([\s\S]*?)```/g, '<div class="mermaid">$1</div>')
-                    // Code blocks
-                    .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-                    // Inline code
-                    .replace(/`([^`]+)`/g, '<code>$1</code>')
-                    // Tables
-                    .replace(/\|(.+)\|\n\|[-:\s|]+\|\n((?:\|.+\|\n?)+)/g, (match, header, rows) => {
-                        const headers = header.split('|').filter(h => h.trim());
-                        const rowsHtml = rows.trim().split('\n').map(row => {
-                            const cells = row.split('|').filter(c => c.trim());
-                            return '<tr>' + cells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
-                        }).join('');
-                        return '<table><thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>' + rowsHtml + '</tbody></table>';
-                    })
-                    // Bold
-                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                    // Italic
-                    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                    // Links
-                    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-                    // Horizontal rules
-                    .replace(/^---$/gm, '<hr>')
-                    // Line breaks
-                    .replace(/\n\n/g, '</p><p>')
-                    .replace(/\n/g, '<br>');
-
-                document.getElementById('content').innerHTML = '<p>' + markdown + '</p>';
-                mermaid.run();
+                // Parse markdown to HTML
+                let html = marked.parse(markdown);
+                
+                // Replace mermaid divs that might have been double-encoded
+                html = html.replace(/<div class="mermaid"><div class="mermaid">/g, '<div class="mermaid">');
+                html = html.replace(/<\/div><\/div>/g, '</div>');
+                
+                // Insert HTML
+                contentDiv.innerHTML = html;
+                
+                // Find all mermaid elements and render them
+                const mermaidElements = document.querySelectorAll('.mermaid');
+                if (mermaidElements.length > 0) {
+                    mermaid.run(mermaidElements);
+                }
+                
             } catch (error) {
-                document.getElementById('content').innerHTML = '<p>Error loading README: ' + error.message + '</p>';
+                contentDiv.innerHTML = `<div class="error">Error loading documentation: ${error.message}</div>`;
+                console.error('Error loading README:', error);
             }
         }
-        loadReadme();
+
+        // Load when DOM is ready
+        document.addEventListener('DOMContentLoaded', loadReadme);
     </script>
 </body>
 </html>
