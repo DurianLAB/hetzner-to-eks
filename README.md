@@ -591,7 +591,15 @@ sequenceDiagram
 
 ### Prerequisites
 
+- **Node.js** (for mermaid-cli)
+- **Python 3** (for extraction scripts)
+- **macOS/Linux** (scripts use bash)
+
 ```bash
+# Verify prerequisites
+node --version
+python3 --version
+
 # Install mermaid-cli via npx
 npx --yes @mermaid-js/mermaid-cli mmdc --version
 ```
