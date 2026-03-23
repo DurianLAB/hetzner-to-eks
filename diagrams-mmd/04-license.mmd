@@ -1,0 +1,80 @@
+flowchart TB
+    subgraph STAGE3["STAGE 3: Full AWS EKS"]
+
+        subgraph PUBLIC["Internet"]
+            USERS["Users"]
+            PARTNERS["Partners / APIs"]
+            CDN["CloudFront CDN"]
+        end
+
+        USERS --> CDN
+        PARTNERS --> CDN
+        CDN --> WAF["AWS WAF (DDoS + Rate Limiting)"]
+        WAF --> ALB["Application Load Balancer"]
+        ALB --> PROD_INGRESS["Ingress (AWS LB Controller)"]
+        PROD_INGRESS --> PROD_WEB["Web App"]
+        PROD_INGRESS --> PROD_API["API Service"]
+        PROD_INGRESS --> PROD_WORKER["Async Workers"]
+        PROD_API --> PROD_INFERENCE["Inference Endpoints"]
+        PROD_API --> RDS["RDS PostgreSQL (Multi-AZ)"]
+        PROD_API --> ELASTI["ElastiCache Redis"]
+        PROD_API --> S3_WEB["S3 - Static Assets"]
+        PROD_API --> SQS["SQS Queues"]
+        PROD_API --> SECRETS["Secrets Manager"]
+        PROD_WORKER --> SQS
+        PROD_WORKER --> RDS
+
+        subgraph EKS["EKS Cluster"]
+            subgraph NS_PROD["namespace: production"]
+                PROD_INGRESS
+                PROD_WEB
+                PROD_API
+                PROD_WORKER
+                PROD_INFERENCE
+            end
+            subgraph NS_STAGING["namespace: staging"]
+                STAGING_WEB["Web App"]
+                STAGING_API["API"]
+            end
+            subgraph NS_MGMT["namespace: management"]
+                GRAFANA["Prometheus + Grafana"]
+                ARGOCD["ArgoCD / Flux CD"]
+                ESO["External Secrets Operator"]
+            end
+        end
+
+        subgraph DATA["Data Services (AWS Managed)"]
+            RDS
+            ELASTI
+            S3_WEB
+            S3_BACKUP["S3 - DB Backups"]
+            EFS["EFS - Shared FS"]
+            SQS
+            SNS["SNS Pub/Sub"]
+            EVENT["EventBridge"]
+            AURORA["Aurora Serverless"]
+        end
+
+        subgraph SEC["Security Services"]
+            SECRETS
+            KMS["KMS (Encryption)"]
+            IAM["IAM Roles / IRSA"]
+            GUARD["GuardDuty"]
+            SEC_HUB["Security Hub"]
+            CTRAIL["CloudTrail"]
+        end
+
+        subgraph CI["CI/CD & DevOps"]
+            GITHUB["GitHub Actions"]
+            ECR["ECR Registry"]
+            ARGOCD
+            TERRAFORM["Terraform IaC"]
+            PAGER["PagerDuty"]
+        end
+
+        GITHUB --> ECR
+        ECR --> ARGOCD
+        ARGOCD --> EKS
+        GUARD --> SEC_HUB
+        SEC_HUB --> PAGER
+    end

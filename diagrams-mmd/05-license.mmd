@@ -1,0 +1,73 @@
+flowchart TD
+    START(["Migration Trigger Assessment"]) --> Q1
+
+    subgraph COMPLIANCE["Compliance Triggers"]
+        Q1{US enterprise customers require SOC 2?}
+        Q1 -->|Yes| C1["SOC 2 Required - migrate to EKS"]
+        Q1 -->|No| Q2
+
+        Q2{Process payment card data?}
+        Q2 -->|Yes| C2["PCI DSS Required - AWS is Level 1 SP"]
+        Q2 -->|No| Q3
+
+        Q3{Handle PHI or healthcare data?}
+        Q3 -->|Yes| C3["HIPAA Required - migrate with BAA"]
+        Q3 -->|No| Q4
+
+        Q4{EU regulations require BSI C5 or KRITIS?}
+        Q4 -->|Yes| C4["Hetzner qualifies (BSI C5)"]
+        Q4 -->|No| Q5
+    end
+
+    subgraph COST["Cost Triggers"]
+        Q5{Monthly infra spend over $5000?}
+        Q5 -->|Yes| C5["Analyze Reserved / Savings Plans"]
+        Q5 -->|No| Q6
+
+        Q6{Need managed services like RDS?}
+        Q6 -->|Yes| C6["Hetzner lacks managed services"]
+        Q6 -->|No| Q7
+    end
+
+    subgraph SCALE["Scale & Reliability Triggers"]
+        Q7{Need multi-region HA with under 1hr RTO?}
+        Q7 -->|Yes| C7["Hetzner has no formal SLA"]
+        Q7 -->|No| Q8
+
+        Q8{Experiencing Hetzner outage impact?}
+        Q8 -->|Yes| C8["No redundancy on Hetzner"]
+        Q8 -->|No| Q9
+
+        Q9{Need under 10ms latency globally?}
+        Q9 -->|Yes| C9["Hetzner limited regions"]
+        Q9 -->|No| Q10
+    end
+
+    subgraph SECURITY["Security Triggers"]
+        Q10{Need customer-facing pentest reports?}
+        Q10 -->|Yes| C10["AWS Artifact provides audit reports"]
+        Q10 -->|No| Q11
+
+        Q11{Team lacks Kubernetes ops expertise?}
+        Q11 -->|Yes| C11["Self-managed K8s risk"]
+        Q11 -->|No| Q12
+    end
+
+    subgraph DECISION["Decision Matrix"]
+        Q12{None of the above?}
+        Q12 -->|Stay on Hetzner| D1["STAY ON HETZNER - Re-assess quarterly"]
+        Q12 -->|Any triggers| D2["MIGRATE TO HYBRID - Stage 2"]
+        Q12 -->|Multiple critical| D3["MIGRATE FULL TO EKS - Stage 3"]
+    end
+
+    C1 -.-> D2
+    C2 -.-> D2
+    C3 -.-> D2
+    C4 -.-> D1
+    C5 -.-> D2
+    C6 -.-> D2
+    C7 -.-> D2
+    C8 -.-> D2
+    C9 -.-> D2
+    C10 -.-> D2
+    C11 -.-> D2

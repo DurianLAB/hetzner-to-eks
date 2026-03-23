@@ -1,0 +1,62 @@
+flowchart TB
+    subgraph STAGE2["STAGE 2: Hybrid Architecture"]
+
+        subgraph INTERNET["Internet"]
+            US["Users / Clients"]
+            US_US["US Enterprise Users"]
+            EU_US["EU Users"]
+        end
+
+        US --> CF["Cloudflare"]
+        US_US --> CF_US["Cloudflare US"]
+        EU_US --> CF_EU["Cloudflare EU"]
+
+        subgraph HETZNER["Hetzner Cloud (EU-Only / Non-Critical)"]
+            CF_EU --> H_LB["Hetzner Load Balancer"]
+            H_LB --> H_FW["Firewall"]
+            H_FW --> H_API["EU-Only API Service"]
+            H_API --> H_DB["PostgreSQL (EU data residency)"]
+            H_API --> H_CACHE["Redis (EU)"]
+            H_API --> H_OBJ["Hetzner Object Storage"]
+
+            subgraph H_K8S["K3s / Talos Cluster"]
+                subgraph H_NS1["Namespace: dev-staging"]
+                    H_WEB_DEV["Web App (dev)"]
+                    H_API_DEV["API (dev)"]
+                end
+                subgraph H_NS2["Namespace: eu-services"]
+                    H_API
+                    H_DB
+                    H_CACHE
+                end
+            end
+        end
+
+        subgraph AWS["AWS (US / Regulated / Critical)"]
+            CF_US --> AWS_ING["AWS Load Balancer Controller"]
+            AWS_ING --> AWS_API["API Service"]
+            AWS_ING --> AWS_WEB["Web Service"]
+            AWS_API --> AWS_WORKER["Workers (SQS-triggered)"]
+            AWS_API --> AWS_RDS["RDS PostgreSQL (Multi-AZ)"]
+            AWS_API --> AWS_ELASTI["ElastiCache Redis"]
+            AWS_API --> AWS_S3["S3 Buckets"]
+            AWS_WORKER --> AWS_SQS["SQS Queues"]
+            AWS_API --> AWS_SECRETS["Secrets Manager"]
+
+            subgraph AWS_EKS["EKS Cluster"]
+                subgraph AWS_NS1["Namespace: us-production"]
+                    AWS_ING
+                    AWS_API
+                    AWS_WEB
+                    AWS_WORKER
+                end
+                subgraph AWS_NS2["Namespace: regulated"]
+                    AWS_COMP["Compliance Workloads"]
+                end
+            end
+        end
+
+        H_API -.-> AWS_API
+        GH["GitHub Actions"] --> AWS_EKS
+        GH --> H_K8S
+    end

@@ -1,19 +1,25 @@
-# Startup Migration: Hetzner to AWS EKS
+# Cloud Provider Selection: OVHcloud / Hetzner to AWS EKS
 
-A decision framework and architecture documentation for startups evaluating infrastructure migration from Hetzner Cloud to AWS EKS.
+A decision framework for startups evaluating infrastructure migration from budget cloud providers (OVHcloud, Hetzner) to AWS EKS.
 
 ---
 
 ## Overview
 
-This guide documents the typical journey of a startup migrating from **Hetzner Cloud** (self-managed Kubernetes) to **AWS EKS** (managed Kubernetes).
+This guide helps you choose between **OVHcloud** (SOC 2 compliant) and **Hetzner** (ISO 27001 certified) for your startup's infrastructure.
+
+| Provider | Best For | Monthly Cost | Compliance |
+|---|---|---|---|
+| **OVHcloud** | US startups, SOC 2 required | €15–150 | SOC 2, ISO 27001 |
+| **Hetzner** | EU startups, ISO 27001 accepted | €10–100 | ISO 27001, BSI C5 |
+| **AWS EKS** | Enterprise, regulated industries | $200–20K | SOC 2, PCI DSS, HIPAA |
 
 ### 3-Stage Progression
 
 | Stage | Platform | Monthly Spend | Team Size | Use Case |
 |---|---|---|---|---|
-| **Stage 1** | Hetzner Only | €20–100 | 1–5 | MVP, EU-focused, Bootstrap |
-| **Stage 2** | Hetzner + AWS Hybrid | €100–500 + $500–2K | 5–15 | US + EU mixed customers |
+| **Stage 1** | OVHcloud / Hetzner | €10–100 | 1–5 | MVP, Bootstrap |
+| **Stage 2** | Provider + AWS Hybrid | €100–500 + $500–2K | 5–15 | US + EU mixed customers |
 | **Stage 3** | Full AWS EKS | $2K–20K | 15+ | US enterprise, Series B+ |
 
 ---
@@ -27,21 +33,31 @@ flowchart TD
     FUNDING -->|Bootstrapped| EVAL
     FUNDING -->|Seed / Series A| EVAL
 
-    EVAL{Hetzner sufficient?}
-    EVAL -->|Yes| DEPLOY
-    EVAL -->|No| ESCALATE
+    EVAL{Which provider?}
+    EVAL -->|EU market / ISO 27001 OK| DEPLOY_HETZNER
+    EVAL -->|US market / SOC 2 required| DEPLOY_OVH
+    EVAL -->|Enterprise / Regulated| ESCALATE
 
-    DEPLOY["Deploy on Hetzner Cloud"] --> K8S
-    K8S["Self-managed K8s (RKE2 / Talos / K3s)"] --> GROW
-    GROW["Iterate & Grow on Hetzner"] --> TRIGGERS
+    DEPLOY_HETZNER["Deploy on Hetzner Cloud"] --> K8S_H
+    DEPLOY_OVH["Deploy on OVHcloud"] --> K8S_O
 
-    TRIGGERS{Migration triggers?}
-    TRIGGERS -->|US Enterprise Deals| ESCALATE
-    TRIGGERS -->|SOC 2 Required| ESCALATE
-    TRIGGERS -->|HIPAA / PCI DSS| ESCALATE
-    TRIGGERS -->|$5K+/mo spend| ESCALATE
-    TRIGGERS -->|Multi-region SLA needed| ESCALATE
-    TRIGGERS -->|No triggers| STAY["Stay on Hetzner"]
+    K8S_H["Self-managed K8s (RKE2 / Talos / K3s)"] --> GROW_H
+    K8S_O["Self-managed K8s (RKE2 / Talos / K3s)"] --> GROW_O
+
+    GROW_H["Iterate & Grow on Hetzner"] --> TRIGGERS_H
+    GROW_O["Iterate & Grow on OVHcloud"] --> TRIGGERS_O
+
+    TRIGGERS_H{Migration triggers?}
+    TRIGGERS_H -->|US Enterprise Deals| ESCALATE
+    TRIGGERS_H -->|SOC 2 Required| ESCALATE
+    TRIGGERS_H -->|HIPAA / PCI DSS| ESCALATE
+    TRIGGERS_H -->|$5K+/mo spend| ESCALATE
+    TRIGGERS_H -->|No triggers| STAY_H["Stay on Hetzner"]
+
+    TRIGGERS_O{Migration triggers?}
+    TRIGGERS_O -->|HIPAA / PCI DSS| ESCALATE
+    TRIGGERS_O -->|$5K+/mo spend| ESCALATE
+    TRIGGERS_O -->|No triggers| STAY_O["Stay on OVHcloud"]
 
     ESCALATE["Identify EKS-ready workloads"] --> SEGREGATE
     SEGREGATE["Segregate workloads"] --> WHICH{Which to migrate first?}
@@ -554,15 +570,16 @@ sequenceDiagram
 
 ### Hidden Cost Comparison
 
-| Factor | Hetzner | AWS EKS |
-|---|---|---|
-| Server cost | Fixed | Plus EKS cluster (~$73/mo fixed) |
-| DDoS protection | Free | Shield Advanced (additional cost) |
-| Egress costs | 20TB included (EU) | ~$90/TB |
-| Managed K8s | Self-managed | Managed control plane |
-| Managed DB/Cache | None | RDS, ElastiCache |
-| Compliance certs | ISO 27001, BSI C5 only | SOC 2, PCI DSS, HIPAA, FedRAMP |
-| Engineer ops time | Higher | Lower |
+| Factor | OVHcloud | Hetzner | AWS EKS |
+|---|---|---|---|
+| Server cost | Moderate | Lowest | Highest |
+| SOC 2 report | Available | Not available | Available |
+| DDoS protection | Free | Free | Shield Advanced (extra) |
+| Egress costs | Varies by region | 20TB included (EU) | ~$90/TB |
+| Managed K8s | Self-managed | Self-managed | Managed control plane |
+| Managed DB/Cache | Limited | None | RDS, ElastiCache |
+| Compliance certs | SOC 2, ISO 27001 | ISO 27001, BSI C5 | SOC 2, PCI DSS, HIPAA |
+| Price vs Hetzner | ~20-30% higher | Baseline | ~7-8x higher |
 
 ### When does EKS ROI make sense?
 
@@ -575,15 +592,43 @@ sequenceDiagram
 
 ## Compliance Comparison
 
-| Certification | Hetzner | AWS EKS |
-|---|---|---|
-| ISO 27001:2022 | Yes | Yes |
-| BSI C5 Type 2 | Yes | Yes |
-| SOC 2 | No | Yes |
-| PCI DSS Level 1 | No | Yes |
-| HIPAA BAA | No | Yes |
-| FedRAMP | No | Yes |
-| GDPR / EU Data Residency | Yes | Yes (Sovereign Cloud) |
+### Quick Summary
+
+| Provider | Primary Certification | SOC 2 | Best For |
+|---|---|---|---|
+| **OVHcloud** | SOC 2 Type II | Yes | US startups, Fintech, Healthtech |
+| **Hetzner** | ISO 27001, BSI C5 | No | EU startups, privacy-focused |
+| **AWS EKS** | SOC 2, PCI DSS, HIPAA | Yes | Enterprise, regulated industries |
+
+### Detailed Comparison
+
+| Certification | OVHcloud | Hetzner | AWS EKS |
+|---|---|---|---|
+| ISO 27001:2022 | Yes | Yes | Yes |
+| BSI C5 Type 2 | Yes | Yes | Yes |
+| **SOC 2 Type II** | **Yes** | No | Yes |
+| PCI DSS Level 1 | Yes | No | Yes |
+| HIPAA BAA | No | No | Yes |
+| FedRAMP | No | No | Yes |
+| GDPR / EU Data Residency | Yes | Yes | Yes (Sovereign Cloud) |
+
+### Provider Recommendations
+
+**Choose OVHcloud if:**
+- Targeting **US-based** startups
+- Customers require **SOC 2** for investor/enterprise deals
+- Fintech, Healthtech, or regulated industries
+- Need SOC 2 report for due diligence
+
+**Choose Hetzner if:**
+- Targeting **EU-based** startups
+- Customers accept **ISO 27001** as equivalent to SOC 2
+- Maximum cost savings (best margins)
+- Privacy-conscious customers
+
+**Bridge the Gap (Hetzner):**
+If using Hetzner, you can say:
+> *"Our physical infrastructure is ISO 27001 certified (Hetzner), and our management layer follows SOC2 principles."*
 
 ---
 

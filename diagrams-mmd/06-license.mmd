@@ -1,0 +1,34 @@
+flowchart LR
+    subgraph INPUTS["Inputs"]
+        COST["Monthly Spend"]
+        COMPLIANCE["Compliance Needs"]
+        TEAM["Team Size"]
+        WORKLOADS["Workload Type"]
+    end
+
+    subgraph PROCESS["Decision Engine"]
+        CHECK1{SOC 2 or PCI or HIPAA Required?}
+        CHECK2{US Enterprise Customers?}
+        CHECK3{Monthly Spend over $5K?}
+        CHECK4{Need Managed Services?}
+        CHECK5{Multi-Region HA?}
+    end
+
+    subgraph OUTPUTS["Recommended Stage"]
+        R1["Stage 1: Hetzner Only Bootstrap MVP EU-focused SaaS Dev/Staging"]
+        R2["Stage 2: Hetzner plus EKS Hybrid US plus EU mixed Some regulated workloads Growing startup"]
+        R3["Stage 3: Full AWS EKS US enterprise primary PCI DSS HIPAA Series B plus IPO path"]
+    end
+
+    INPUTS --> PROCESS
+    PROCESS --> CHECK1
+    CHECK1 -->|Yes| R3
+    CHECK1 -->|No| CHECK2
+    CHECK2 -->|Yes| R2
+    CHECK2 -->|No| CHECK3
+    CHECK3 -->|Yes| CHECK4
+    CHECK3 -->|No| R1
+    CHECK4 -->|Yes| R2
+    CHECK4 -->|No| CHECK5
+    CHECK5 -->|Yes| R2
+    CHECK5 -->|No| R1
